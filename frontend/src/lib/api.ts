@@ -10,7 +10,15 @@ export const api = {
     };
 
     const response = await fetch(`${BASE_URL}${path}`, { ...options, headers });
-    const data = await response.json();
+    const text = await response.text(); // Pega a resposta como texto bruto primeiro
+
+    let data;
+    try {
+      data = JSON.parse(text); // Tenta transformar em JSON
+    } catch (e) {
+      // Se não for JSON (como um erro da Cloudflare), mostra a mensagem real
+      throw new Error(text || 'Erro na requisição. O servidor não retornou um formato válido.');
+    }
 
     if (!response.ok) {
       throw new Error(data.error || 'Erro na requisição');
