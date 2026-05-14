@@ -54,75 +54,6 @@ const Admin = () => {
   const [pkgTypes, setPkgTypes] = useState<PkgType[]>([]);
   const [newTypeLabel, setNewTypeLabel] = useState("");
   const [newTypeDiscount, setNewTypeDiscount] = useState<number>(0);
-  const [uploading, setUploading] = useState(false);
-  const [localPreview, setLocalPreview] = useState<string>("");
-  const [thumbPreview, setThumbPreview] = useState<string>("");
-
-  const generateThumbnail = (file: File, maxSize = 400): Promise<Blob> =>
-    new Promise((resolve, reject) => {
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = () => {
-        const ratio = Math.min(maxSize / img.width, maxSize / img.height, 1);
-        const w = Math.round(img.width * ratio);
-        const h = Math.round(img.height * ratio);
-        const canvas = document.createElement("canvas");
-        canvas.width = w; canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) { URL.revokeObjectURL(url); reject(new Error("canvas")); return; }
-        ctx.drawImage(img, 0, 0, w, h);
-        canvas.toBlob((blob) => {
-          URL.revokeObjectURL(url);
-          if (blob) resolve(blob); else reject(new Error("blob"));
-        }, "image/jpeg", 0.8);
-      };
-      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("load")); };
-      img.src = url;
-    });
-
-  const handleImageUpload = async (file: File) => {
-    if (!["image/png", "image/jpeg"].includes(file.type)) {
-      toast.error("Envie apenas imagens PNG ou JPG");
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Imagem muito grande (máx. 5MB)");
-      return;
-    }
-    setLocalPreview(URL.createObjectURL(file));
-    setThumbPreview("");
-    setUploading(true);
-    try {
-      const thumbBlob = await generateThumbnail(file);
-      setThumbPreview(URL.createObjectURL(thumbBlob));
-
-      // Converter arquivo para base64 para envio via API
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64 = reader.result as string;
-        try {
-          const response = await api.post<{ url: string }>("/packages/upload-image", {
-            image: base64,
-            filename: file.name,
-          });
-          setForm((f) => ({ ...f, cover_image: response.url }));
-          toast.success("Imagem enviada com sucesso");
-        } catch (err: any) {
-          toast.error(err.message || "Falha no upload");
-        } finally {
-          setUploading(false);
-        }
-      };
-      reader.onerror = () => {
-        toast.error("Erro ao ler arquivo");
-        setUploading(false);
-      };
-      reader.readAsDataURL(file);
-    } catch (err: any) {
-      toast.error(err.message || "Falha no upload");
-      setUploading(false);
-    }
-  };
 
   useEffect(() => {
     if (loading) return;
@@ -135,7 +66,6 @@ const Admin = () => {
     try {
       const data = await api.get<Pkg[]>("/packages");
       setPkgs(data || []);
-      // Categorias são fixas por enquanto
       setPkgTypes([]);
     } catch (err: any) {
       toast.error("Erro ao carregar pacotes");
@@ -174,6 +104,7 @@ const Admin = () => {
     setForm({ ...empty, category: cats[0]?.slug || "" });
     setOpen(true);
   };
+  
   const openEdit = (p: Pkg) => {
     setEditing(p);
     setForm({
@@ -443,9 +374,22 @@ const Admin = () => {
                 </div>
               </div>
               <div>
-                <Label htmlFor="image">Imagem de capa</Label>
-                <Input id="image" type="file" accept="image/png,image/jpeg" onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0])} disabled={uploading} />
-                {localPreview && <img src={localPreview} alt="preview" className="mt-2 h-32 w-32 rounded object-cover" />}
+                <Label htmlFor="image">Link da Imagem de Capa (Imgur)</Label>
+                <Input 
+                  id="image" 
+                  type="text" 
+                  placeholder="https://i.imgur.com/suafoto.jpg"
+                  value={form.cover_image} 
+                  onChange={(e) => setForm({ ...form, cover_image: e.target.value })} 
+                />
+                {form.cover_image && (
+                  <img 
+                    src={form.cover_image} 
+                    alt="preview" 
+                    className="mt-2 h-32 w-full rounded-md object-cover" 
+                    onError={(e) => e.currentTarget.src = "/placeholder.svg"}
+                  />
+                )}
               </div>
               <div>
                 <Label htmlFor="itinerary">Itinerário</Label>
