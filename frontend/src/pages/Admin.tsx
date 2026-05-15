@@ -64,18 +64,14 @@ const Admin = () => {
 
   const fetchAll = async () => {
     try {
-      const data = await api.get<Pkg[]>("/packages");
-      setPkgs(data || []);
-      
-      // Tenta carregar tipos de pacotes do backend
-      try {
-        const types = await api.get<PkgType[]>("/packages/types");
-        setPkgTypes(types || []);
-      } catch {
-        setPkgTypes([]);
-      }
+      const [pkgsData, typesData] = await Promise.all([
+        api.get<Pkg[]>("/packages"),
+        api.get<PkgType[]>("/packages/types").catch(() => [])
+      ]);
+      setPkgs(pkgsData || []);
+      setPkgTypes(typesData || []);
     } catch (err: any) {
-      toast.error("Erro ao carregar pacotes");
+      toast.error("Erro ao carregar dados do servidor");
     }
   };
 
@@ -83,10 +79,8 @@ const Admin = () => {
     const label = newTypeLabel.trim();
     if (label.length < 2) { toast.error("Nome muito curto"); return; }
     const slug = slugify(label);
-    if (!slug) { toast.error("Nome inválido"); return; }
-    const discount = Math.max(0, Math.min(100, Number(newTypeDiscount) || 0));
     try {
-      await api.post("/packages/types", { slug, label, discount_percent: discount });
+      await api.post("/packages/types", { slug, label, discount_percent: newTypeDiscount });
       setNewTypeLabel(""); setNewTypeDiscount(0);
       fetchAll();
       toast.success("Tipo de pacote criado");
@@ -129,19 +123,14 @@ const Admin = () => {
       toast.error("Preencha título, descrição e categoria"); 
       return; 
     }
-    if (!form.departure_date) { 
-      toast.error("Informe a data de partida"); 
-      return; 
-    }
-
     try {
       const payload = {
         ...form,
         price: Number(form.price),
         duration_days: Number(form.duration_days),
         total_spots: Number(form.total_spots),
-        // Na criação, available_spots inicia igual ao total
-        available_spots: editing ? undefined : Number(form.total_spots)
+        available_spots: editing ? undefined : Number(form.total_spots),
+        is_featured: form.is_featured ? 1 : 0 // Garante formato numérico para o SQLite se necessário
       };
 
       if (editing) {
@@ -182,7 +171,6 @@ const Admin = () => {
     const label = newCatLabel.trim();
     if (label.length < 2) { toast.error("Nome muito curto"); return; }
     const slug = slugify(label);
-    if (!slug) { toast.error("Nome inválido"); return; }
     try {
       await api.post("/packages/categories", { slug, label });
       setNewCatLabel("");
@@ -200,7 +188,7 @@ const Admin = () => {
       await fetchCategories(true);
       toast.success("Categoria removida");
     } catch (err: any) {
-      toast.error("Não foi possível excluir (em uso por algum pacote).");
+      toast.error("Não foi possível excluir (em uso).");
     }
   };
 
@@ -208,207 +196,179 @@ const Admin = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="container py-10">
-        <div className="mb-8">
-          <h1 className="font-serif text-3xl font-bold md:text-4xl">Painel Admin</h1>
-          <p className="mt-1 text-muted-foreground">Gerencie pacotes e categorias</p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="font-serif text-3xl font-bold md:text-4xl">Painel Admin</h1>
+            <p className="mt-1 text-muted-foreground">Gerencie a D+ Turismo</p>
+          </div>
+          <Button onClick={openCreate} className="bg-gradient-gold text-primary hover:opacity-90 shadow-gold">
+            <Plus className="mr-1.5 h-4 w-4" /> Novo pacote
+          </Button>
         </div>
 
-        <Tabs defaultValue="pacotes">
-          <TabsList>
+        <Tabs defaultValue="pacotes" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 mb-8">
             <TabsTrigger value="pacotes">Pacotes</TabsTrigger>
             <TabsTrigger value="categorias">Categorias</TabsTrigger>
-            <TabsTrigger value="reservas">Gerenciar reservas</TabsTrigger>
-            <TabsTrigger value="publicacoes">Publicações</TabsTrigger>
+            <TabsTrigger value="reservas">Reservas</TabsTrigger>
+            <TabsTrigger value="publicacoes">Fotos/Blog</TabsTrigger>
             <TabsTrigger value="relatorios">Relatórios</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="pacotes" className="mt-6">
-            <div className="mb-4 flex justify-end">
-              <Button onClick={openCreate} className="bg-gradient-gold text-primary hover:opacity-90 shadow-gold">
-                <Plus className="mr-1.5 h-4 w-4" /> Novo pacote
-              </Button>
-            </div>
-
+          <TabsContent value="pacotes">
             <div className="grid gap-4">
               {pkgs.map((p) => (
-                <Card key={p.id} className="shadow-card-soft">
-                  <CardHeader className="pb-3">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <CardTitle className="font-serif text-lg flex items-center gap-2">
-                          {p.title}
-                          {p.is_featured && <Star className="h-4 w-4 fill-accent text-accent" />}
-                        </CardTitle>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          <Badge variant="outline">{labelFor(p.category, cats)}</Badge>
-                          <span>{p.location}</span> · <span>{formatDate(p.departure_date)}</span>
-                          · <span>{formatBRL(Number(p.price))}</span>
-                          · <span>{p.available_spots}/{p.total_spots} vagas</span>
+                <Card key={p.id} className="shadow-card-soft overflow-hidden">
+                  <div className="flex flex-col md:flex-row">
+                    {p.cover_image && (
+                      <div className="w-full md:w-48 h-32 md:h-auto">
+                        <img src={p.cover_image} className="w-full h-full object-cover" alt="" />
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <CardHeader className="pb-2">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <CardTitle className="font-serif text-lg flex items-center gap-2">
+                              {p.title}
+                              {p.is_featured && <Star className="h-4 w-4 fill-accent text-accent" />}
+                            </CardTitle>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                              <Badge variant="outline">{labelFor(p.category, cats)}</Badge>
+                              <span>{p.location}</span> · <span>{formatDate(p.departure_date)}</span>
+                              · <span className="font-bold text-primary">{formatBRL(Number(p.price))}</span>
+                              · <span>{p.available_spots}/{p.total_spots} vagas</span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant={p.is_active ? "outline" : "secondary"} size="sm" onClick={() => toggleActive(p)}>
+                              {p.is_active ? "Ativo" : "Inativo"}
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => openEdit(p)}><Pencil className="h-3.5 w-3.5" /></Button>
+                            <Button variant="outline" size="sm" onClick={() => remove(p.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant={p.is_active ? "outline" : "secondary"} size="sm" onClick={() => toggleActive(p)}>
-                          {p.is_active ? "Ativo" : "Inativo"}
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => openEdit(p)}><Pencil className="h-3.5 w-3.5" /></Button>
-                        <Button variant="outline" size="sm" onClick={() => remove(p.id)}>
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                        </Button>
-                      </div>
+                      </CardHeader>
+                      <CardContent className="text-sm text-muted-foreground line-clamp-2">
+                        {p.description}
+                      </CardContent>
                     </div>
-                  </CardHeader>
-                  <CardContent className="text-sm text-muted-foreground line-clamp-2">{p.description}</CardContent>
+                  </div>
                 </Card>
               ))}
             </div>
           </TabsContent>
 
-          <TabsContent value="categorias" className="mt-6">
-            <div className="grid gap-6 lg:grid-cols-2">
-              <Card>
-                <CardHeader><CardTitle className="font-serif text-xl">Gerenciar categorias</CardTitle></CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="flex gap-2">
-                    <Input placeholder="Ex: Lua de mel" value={newCatLabel} onChange={(e) => setNewCatLabel(e.target.value)} />
-                    <Button onClick={addCategory}><Plus className="mr-1.5 h-4 w-4" /> Adicionar</Button>
-                  </div>
-                  <div className="grid gap-2">
-                    {cats.map((c) => (
-                      <div key={c.slug} className="flex items-center justify-between rounded-lg border border-border p-3">
-                        <div>
-                          <div className="font-medium">{c.label}</div>
-                          <div className="text-xs text-muted-foreground">{c.slug}</div>
+          <TabsContent value="categorias">
+             <div className="grid gap-6 lg:grid-cols-2">
+               <Card>
+                 <CardHeader><CardTitle className="font-serif">Categorias Dinâmicas</CardTitle></CardHeader>
+                 <CardContent className="space-y-4">
+                    <div className="flex gap-2">
+                      <Input placeholder="Nova categoria..." value={newCatLabel} onChange={(e) => setNewCatLabel(e.target.value)} />
+                      <Button onClick={addCategory}><Plus className="h-4 w-4" /></Button>
+                    </div>
+                    <div className="space-y-2">
+                      {cats.map(c => (
+                        <div key={c.slug} className="flex items-center justify-between p-2 border rounded-md">
+                          <span>{c.label}</span>
+                          <Button variant="ghost" size="sm" onClick={() => removeCategory(c.slug)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                         </div>
-                        <Button variant="ghost" size="sm" onClick={() => removeCategory(c.slug)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                      ))}
+                    </div>
+                 </CardContent>
+               </Card>
+               <Card>
+                 <CardHeader><CardTitle className="font-serif">Tipos de Oferta (Descontos)</CardTitle></CardHeader>
+                 <CardContent className="space-y-4">
+                    <div className="grid gap-2">
+                      <Input placeholder="Ex: Black Friday" value={newTypeLabel} onChange={(e) => setNewTypeLabel(e.target.value)} />
+                      <div className="flex gap-2">
+                        <Input type="number" placeholder="Desconto %" value={newTypeDiscount} onChange={(e) => setNewTypeDiscount(Number(e.target.value))} />
+                        <Button onClick={addPackageType} className="w-full">Criar Tipo</Button>
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader><CardTitle className="font-serif text-xl">Tipos de pacote</CardTitle></CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="flex gap-2">
-                    <Input placeholder="Ex: Promoção" value={newTypeLabel} onChange={(e) => setNewTypeLabel(e.target.value)} />
-                    <Input type="number" placeholder="Desconto %" value={newTypeDiscount} onChange={(e) => setNewTypeDiscount(Number(e.target.value))} className="w-24" />
-                    <Button onClick={addPackageType}><Plus className="mr-1.5 h-4 w-4" /> Adicionar</Button>
-                  </div>
-                  <div className="grid gap-2">
-                    {pkgTypes.map((t) => (
-                      <div key={t.slug} className="flex items-center justify-between rounded-lg border border-border p-3">
-                        <div>
-                          <div className="font-medium">{t.label}</div>
-                          <div className="text-xs text-muted-foreground">{t.discount_percent}% de desconto</div>
+                    </div>
+                    <div className="space-y-2">
+                      {pkgTypes.map(t => (
+                        <div key={t.slug} className="flex items-center justify-between p-2 border rounded-md">
+                          <span>{t.label} ({t.discount_percent}%)</span>
+                          <Button variant="ghost" size="sm" onClick={() => removePackageType(t.slug)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                         </div>
-                        <Button variant="ghost" size="sm" onClick={() => removePackageType(t.slug)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                      ))}
+                    </div>
+                 </CardContent>
+               </Card>
+             </div>
           </TabsContent>
 
-          <TabsContent value="reservas" className="mt-6">
-            <BookingsPanel />
-          </TabsContent>
-
-          <TabsContent value="publicacoes" className="mt-6">
-            <PublicationsPanel />
-          </TabsContent>
-
-          <TabsContent value="relatorios" className="mt-6">
-            <AccommodationsReport />
-          </TabsContent>
+          <TabsContent value="reservas"><BookingsPanel /></TabsContent>
+          <TabsContent value="publicacoes"><PublicationsPanel /></TabsContent>
+          <TabsContent value="relatorios"><AccommodationsReport /></TabsContent>
         </Tabs>
 
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent className="max-h-[90vh] overflow-y-auto max-w-2xl">
             <DialogHeader>
-              <DialogTitle className="font-serif text-2xl">{editing ? "Editar" : "Novo"} pacote</DialogTitle>
-              <DialogDescription className="sr-only">Formulário para cadastro e edição de pacotes de turismo.</DialogDescription>
+              <DialogTitle className="font-serif text-2xl">{editing ? "Editar" : "Novo"} Pacote</DialogTitle>
+              <DialogDescription>Preencha os dados abaixo para publicar ou atualizar uma viagem.</DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="title">Título</Label>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="title">Nome da Viagem</Label>
                 <Input id="title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               </div>
-              <div>
-                <Label htmlFor="description">Descrição</Label>
-                <Textarea id="description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label htmlFor="location">Localização</Label>
-                  <Input id="location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
-                </div>
-                <div>
-                  <Label htmlFor="category">Categoria</Label>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>Categoria</Label>
                   <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                     <SelectContent>
                       {cats.map((c) => <SelectItem key={c.slug} value={c.slug}>{c.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label htmlFor="departure">Data de partida</Label>
-                  <Input id="departure" type="date" value={form.departure_date} onChange={(e) => setForm({ ...form, departure_date: e.target.value })} />
+                <div className="grid gap-2">
+                  <Label>Tipo/Oferta (Opcional)</Label>
+                  <Select value={form.package_type || "none"} onValueChange={(v) => setForm({ ...form, package_type: v === "none" ? null : v })}>
+                    <SelectTrigger><SelectValue placeholder="Sem oferta" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhum</SelectItem>
+                      {pkgTypes.map((t) => <SelectItem key={t.slug} value={t.slug}>{t.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div>
-                  <Label htmlFor="duration">Duração (dias)</Label>
-                  <Input id="duration" type="number" min="1" value={form.duration_days} onChange={(e) => setForm({ ...form, duration_days: Number(e.target.value) })} />
-                </div>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label htmlFor="price">Preço (R$)</Label>
-                  <Input id="price" type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} />
-                </div>
-                <div>
-                  <Label htmlFor="spots">Vagas totais</Label>
-                  <Input id="spots" type="number" min="1" value={form.total_spots} onChange={(e) => setForm({ ...form, total_spots: Number(e.target.value) })} />
-                </div>
-              </div>
-              
-              <div>
-                <Label htmlFor="image">Link da Imagem de Capa (Imgur)</Label>
-                <Input 
-                  id="image" 
-                  type="text" 
-                  placeholder="https://i.imgur.com/seulink.jpg"
-                  value={form.cover_image || ""} 
-                  onChange={(e) => setForm({ ...form, cover_image: e.target.value })} 
-                />
-                {form.cover_image && (
-                  <img src={form.cover_image} alt="preview" className="mt-2 h-32 w-full rounded-md object-cover border" />
-                )}
               </div>
 
-              <div>
-                <Label htmlFor="itinerary">Itinerário</Label>
-                <Textarea id="itinerary" value={form.itinerary || ""} onChange={(e) => setForm({ ...form, itinerary: e.target.value })} rows={2} />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>Partida</Label>
+                  <Input type="date" value={form.departure_date} onChange={(e) => setForm({ ...form, departure_date: e.target.value })} />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Preço (R$)</Label>
+                  <Input type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="included">Incluído</Label>
-                <Textarea id="included" value={form.included || ""} onChange={(e) => setForm({ ...form, included: e.target.value })} rows={2} />
+
+              <div className="grid gap-2">
+                <Label>Link da Imagem (Imgur)</Label>
+                <Input placeholder="https://i.imgur.com/..." value={form.cover_image || ""} onChange={(e) => setForm({ ...form, cover_image: e.target.value })} />
               </div>
-              <div className="flex items-center gap-2">
-                <Switch checked={form.is_featured} onCheckedChange={(v) => setForm({ ...form, is_featured: v })} />
-                <Label>Destacar este pacote</Label>
+
+              <div className="grid gap-2">
+                <Label>Descrição Curta</Label>
+                <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
               </div>
-              <div className="flex gap-2 justify-end pt-4">
-                <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-                <Button onClick={save} className="bg-gradient-gold text-primary hover:opacity-90">
-                  {editing ? "Atualizar" : "Criar"} pacote
-                </Button>
+
+              <div className="flex items-center space-x-2 border p-3 rounded-md bg-muted/30">
+                <Switch id="featured" checked={form.is_featured} onCheckedChange={(v) => setForm({ ...form, is_featured: v })} />
+                <Label htmlFor="featured" className="cursor-pointer">Destacar na página inicial</Label>
+              </div>
+
+              <div className="flex gap-2 justify-end mt-4">
+                <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
+                <Button onClick={save} className="bg-primary text-white">Salvar Pacote</Button>
               </div>
             </div>
           </DialogContent>
