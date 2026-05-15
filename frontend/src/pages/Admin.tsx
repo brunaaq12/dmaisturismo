@@ -126,6 +126,7 @@ const Admin = () => {
           title: form.title, description: form.description, location: form.location || form.title,
           category: form.category, departure_date: form.departure_date,
           duration_days: Number(form.duration_days), price: Number(form.price),
+          total_spots: Number(form.total_spots), // 🚨 OLHA QUEM FALTAVA AQUI!
           cover_image: form.cover_image || null, itinerary: form.itinerary || null,
           included: form.included || null, is_featured: form.is_featured,
           package_type: form.package_type || null,
@@ -149,7 +150,6 @@ const Admin = () => {
       toast.error(err.message);
     }
   };
-
   const remove = async (id: string) => {
     if (!confirm("Excluir este pacote?")) return;
     try {
