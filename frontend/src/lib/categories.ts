@@ -5,45 +5,38 @@ export interface CategoryRow {
   label: string;
 }
 
-let _cache: CategoryRow[] | null = null;
-const _listeners = new Set<(cats: CategoryRow[]) => void>();
+// Estado interno para os componentes que assinam as mudanças
+let currentCategories: CategoryRow[] = [];
+const subscribers = new Set<(cats: CategoryRow[]) => void>();
 
-export const fetchCategories = async (force = false): Promise<CategoryRow[]> => {
-  if (_cache && !force) return _cache;
+export const subscribeCategories = (callback: (cats: CategoryRow[]) => void) => {
+  subscribers.add(callback);
+  callback(currentCategories);
+  return () => { subscribers.delete(callback); };
+};
+
+const notify = () => {
+  subscribers.forEach(cb => cb([...currentCategories]));
+};
+
+// Esta é a função que o seu hook já chama! 
+// Agora ela busca do banco de dados ao invés de usar nomes fixos.
+export const fetchCategories = async (force = false) => {
+  if (currentCategories.length > 0 && !force) return;
+  
   try {
-    // Como o backend SQLite é simples, as categorias podem ser fixas ou vir de uma rota
-    // Por enquanto, vamos usar as categorias padrão do projeto
-    const data: CategoryRow[] = [
-      { slug: "bate_volta", label: "Bate e Volta" },
-      { slug: "casal", label: "Casal" },
-      { slug: "excursao", label: "Excursão" }
-    ];
-    _cache = data;
-    _listeners.forEach((fn) => fn(_cache!));
-    return _cache;
-  } catch (e) {
-    return [];
+    const data = await api.get<CategoryRow[]>("/packages/categories");
+    currentCategories = data || [];
+    notify();
+  } catch (err) {
+    console.error("Falha ao buscar categorias:", err);
+    // Em caso de erro, evita que o site quebre enviando uma lista vazia
+    currentCategories = [];
+    notify();
   }
 };
 
-export const subscribeCategories = (fn: (cats: CategoryRow[]) => void) => {
-  _listeners.add(fn);
-  if (_cache) fn(_cache);
-  return () => _listeners.delete(fn);
+// Utilitário para pegar o nome bonito a partir do slug
+export const labelFor = (slug: string, cats: CategoryRow[]) => {
+  return cats.find(c => c.slug === slug)?.label || slug;
 };
-
-export const labelFor = (slug: string, cats: CategoryRow[]) =>
-  cats.find((c) => c.slug === slug)?.label ?? slug;
-
-export const MONTHS = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
-];
-
-export const formatBRL = (n: number) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
-
-export const formatDate = (iso: string) =>
-  new Date(iso + "T00:00:00").toLocaleDateString("pt-BR", {
-    day: "2-digit", month: "long", year: "numeric",
-  });
