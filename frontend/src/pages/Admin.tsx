@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Star } from "lucide-react";
@@ -54,6 +54,75 @@ const Admin = () => {
   const [pkgTypes, setPkgTypes] = useState<PkgType[]>([]);
   const [newTypeLabel, setNewTypeLabel] = useState("");
   const [newTypeDiscount, setNewTypeDiscount] = useState<number>(0);
+  const [uploading, setUploading] = useState(false);
+  const [localPreview, setLocalPreview] = useState<string>("");
+  const [thumbPreview, setThumbPreview] = useState<string>("");
+
+  const generateThumbnail = (file: File, maxSize = 400): Promise<Blob> =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const ratio = Math.min(maxSize / img.width, maxSize / img.height, 1);
+        const w = Math.round(img.width * ratio);
+        const h = Math.round(img.height * ratio);
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { URL.revokeObjectURL(url); reject(new Error("canvas")); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob((blob) => {
+          URL.revokeObjectURL(url);
+          if (blob) resolve(blob); else reject(new Error("blob"));
+        }, "image/jpeg", 0.8);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("load")); };
+      img.src = url;
+    });
+
+  const handleImageUpload = async (file: File) => {
+    if (!["image/png", "image/jpeg"].includes(file.type)) {
+      toast.error("Envie apenas imagens PNG ou JPG");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Imagem muito grande (máx. 5MB)");
+      return;
+    }
+    setLocalPreview(URL.createObjectURL(file));
+    setThumbPreview("");
+    setUploading(true);
+    try {
+      const thumbBlob = await generateThumbnail(file);
+      setThumbPreview(URL.createObjectURL(thumbBlob));
+
+      // Converter arquivo para base64 para envio via API
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result as string;
+        try {
+          const response = await api.post<{ url: string }>("/packages/upload-image", {
+            image: base64,
+            filename: file.name,
+          });
+          setForm((f) => ({ ...f, cover_image: response.url }));
+          toast.success("Imagem enviada com sucesso");
+        } catch (err: any) {
+          toast.error(err.message || "Falha no upload");
+        } finally {
+          setUploading(false);
+        }
+      };
+      reader.onerror = () => {
+        toast.error("Erro ao ler arquivo");
+        setUploading(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err: any) {
+      toast.error(err.message || "Falha no upload");
+      setUploading(false);
+    }
+  };
 
   useEffect(() => {
     if (loading) return;
@@ -64,14 +133,12 @@ const Admin = () => {
 
   const fetchAll = async () => {
     try {
-      const [pkgsData, typesData] = await Promise.all([
-        api.get<Pkg[]>("/packages"),
-        api.get<PkgType[]>("/packages/types").catch(() => [])
-      ]);
-      setPkgs(pkgsData || []);
-      setPkgTypes(typesData || []);
+      const data = await api.get<Pkg[]>("/packages");
+      setPkgs(data || []);
+      // Categorias são fixas por enquanto
+      setPkgTypes([]);
     } catch (err: any) {
-      toast.error("Erro ao carregar dados do servidor");
+      toast.error("Erro ao carregar pacotes");
     }
   };
 
@@ -79,8 +146,10 @@ const Admin = () => {
     const label = newTypeLabel.trim();
     if (label.length < 2) { toast.error("Nome muito curto"); return; }
     const slug = slugify(label);
+    if (!slug) { toast.error("Nome inválido"); return; }
+    const discount = Math.max(0, Math.min(100, Number(newTypeDiscount) || 0));
     try {
-      await api.post("/packages/types", { slug, label, discount_percent: newTypeDiscount });
+      await api.post("/packages/types", { slug, label, discount_percent: discount });
       setNewTypeLabel(""); setNewTypeDiscount(0);
       fetchAll();
       toast.success("Tipo de pacote criado");
@@ -105,7 +174,6 @@ const Admin = () => {
     setForm({ ...empty, category: cats[0]?.slug || "" });
     setOpen(true);
   };
-
   const openEdit = (p: Pkg) => {
     setEditing(p);
     setForm({
@@ -119,29 +187,33 @@ const Admin = () => {
   };
 
   const save = async () => {
-    if (!form.title || !form.description || !form.category) { 
-      toast.error("Preencha título, descrição e categoria"); 
-      return; 
-    }
+    if (!form.title || !form.description || !form.category) { toast.error("Preencha título, descrição e categoria"); return; }
+    if (!form.departure_date) { toast.error("Informe a data de partida"); return; }
     try {
-      const payload = {
-        ...form,
-        price: Number(form.price),
-        duration_days: Number(form.duration_days),
-        total_spots: Number(form.total_spots),
-        available_spots: editing ? undefined : Number(form.total_spots),
-        is_featured: form.is_featured ? 1 : 0 // Garante formato numérico para o SQLite se necessário
-      };
-
       if (editing) {
-        await api.put(`/packages/${editing.id}`, payload);
+        await api.put(`/packages/${editing.id}`, {
+          title: form.title, description: form.description, location: form.location || form.title,
+          category: form.category, departure_date: form.departure_date,
+          duration_days: Number(form.duration_days), price: Number(form.price),
+          cover_image: form.cover_image || null, itinerary: form.itinerary || null,
+          included: form.included || null, is_featured: form.is_featured,
+          package_type: form.package_type || null,
+        });
         toast.success("Pacote atualizado");
       } else {
-        await api.post("/packages", payload);
+        await api.post("/packages", {
+          title: form.title, description: form.description,
+          location: form.location || form.title, category: form.category,
+          departure_date: form.departure_date, duration_days: Number(form.duration_days),
+          price: Number(form.price), total_spots: Number(form.total_spots),
+          available_spots: Number(form.total_spots),
+          cover_image: form.cover_image || null, itinerary: form.itinerary || null,
+          included: form.included || null, is_featured: form.is_featured,
+          package_type: form.package_type || null,
+        });
         toast.success("Pacote criado");
       }
-      setOpen(false); 
-      fetchAll();
+      setOpen(false); fetchAll();
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -171,6 +243,7 @@ const Admin = () => {
     const label = newCatLabel.trim();
     if (label.length < 2) { toast.error("Nome muito curto"); return; }
     const slug = slugify(label);
+    if (!slug) { toast.error("Nome inválido"); return; }
     try {
       await api.post("/packages/categories", { slug, label });
       setNewCatLabel("");
@@ -182,13 +255,13 @@ const Admin = () => {
   };
 
   const removeCategory = async (slug: string) => {
-    if (!confirm(`Excluir a categoria "${slug}"?`)) return;
+    if (!confirm(`Excluir a categoria "${slug}"? Pacotes que a utilizam impedem a exclusão.`)) return;
     try {
       await api.delete(`/packages/categories/${slug}`);
       await fetchCategories(true);
       toast.success("Categoria removida");
     } catch (err: any) {
-      toast.error("Não foi possível excluir (em uso).");
+      toast.error("Não foi possível excluir (em uso por algum pacote).");
     }
   };
 
@@ -196,179 +269,201 @@ const Admin = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="container py-10">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="font-serif text-3xl font-bold md:text-4xl">Painel Admin</h1>
-            <p className="mt-1 text-muted-foreground">Gerencie a D+ Turismo</p>
-          </div>
-          <Button onClick={openCreate} className="bg-gradient-gold text-primary hover:opacity-90 shadow-gold">
-            <Plus className="mr-1.5 h-4 w-4" /> Novo pacote
-          </Button>
+        <div className="mb-8">
+          <h1 className="font-serif text-3xl font-bold md:text-4xl">Painel Admin</h1>
+          <p className="mt-1 text-muted-foreground">Gerencie pacotes e categorias</p>
         </div>
 
-        <Tabs defaultValue="pacotes" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 mb-8">
+        <Tabs defaultValue="pacotes">
+          <TabsList>
             <TabsTrigger value="pacotes">Pacotes</TabsTrigger>
             <TabsTrigger value="categorias">Categorias</TabsTrigger>
-            <TabsTrigger value="reservas">Reservas</TabsTrigger>
-            <TabsTrigger value="publicacoes">Fotos/Blog</TabsTrigger>
+            <TabsTrigger value="reservas">Gerenciar reservas</TabsTrigger>
+            <TabsTrigger value="publicacoes">Publicações</TabsTrigger>
             <TabsTrigger value="relatorios">Relatórios</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="pacotes">
+          <TabsContent value="pacotes" className="mt-6">
+            <div className="mb-4 flex justify-end">
+              <Button onClick={openCreate} className="bg-gradient-gold text-primary hover:opacity-90 shadow-gold">
+                <Plus className="mr-1.5 h-4 w-4" /> Novo pacote
+              </Button>
+            </div>
+
             <div className="grid gap-4">
               {pkgs.map((p) => (
-                <Card key={p.id} className="shadow-card-soft overflow-hidden">
-                  <div className="flex flex-col md:flex-row">
-                    {p.cover_image && (
-                      <div className="w-full md:w-48 h-32 md:h-auto">
-                        <img src={p.cover_image} className="w-full h-full object-cover" alt="" />
-                      </div>
-                    )}
-                    <div className="flex-1">
-                      <CardHeader className="pb-2">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <CardTitle className="font-serif text-lg flex items-center gap-2">
-                              {p.title}
-                              {p.is_featured && <Star className="h-4 w-4 fill-accent text-accent" />}
-                            </CardTitle>
-                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                              <Badge variant="outline">{labelFor(p.category, cats)}</Badge>
-                              <span>{p.location}</span> · <span>{formatDate(p.departure_date)}</span>
-                              · <span className="font-bold text-primary">{formatBRL(Number(p.price))}</span>
-                              · <span>{p.available_spots}/{p.total_spots} vagas</span>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button variant={p.is_active ? "outline" : "secondary"} size="sm" onClick={() => toggleActive(p)}>
-                              {p.is_active ? "Ativo" : "Inativo"}
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={() => openEdit(p)}><Pencil className="h-3.5 w-3.5" /></Button>
-                            <Button variant="outline" size="sm" onClick={() => remove(p.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
-                          </div>
+                <Card key={p.id} className="shadow-card-soft">
+                  <CardHeader className="pb-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <CardTitle className="font-serif text-lg flex items-center gap-2">
+                          {p.title}
+                          {p.is_featured && <Star className="h-4 w-4 fill-accent text-accent" />}
+                        </CardTitle>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <Badge variant="outline">{labelFor(p.category, cats)}</Badge>
+                          <span>{p.location}</span> · <span>{formatDate(p.departure_date)}</span>
+                          · <span>{formatBRL(Number(p.price))}</span>
+                          · <span>{p.available_spots}/{p.total_spots} vagas</span>
                         </div>
-                      </CardHeader>
-                      <CardContent className="text-sm text-muted-foreground line-clamp-2">
-                        {p.description}
-                      </CardContent>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant={p.is_active ? "outline" : "secondary"} size="sm" onClick={() => toggleActive(p)}>
+                          {p.is_active ? "Ativo" : "Inativo"}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => openEdit(p)}><Pencil className="h-3.5 w-3.5" /></Button>
+                        <Button variant="outline" size="sm" onClick={() => remove(p.id)}>
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground line-clamp-2">{p.description}</CardContent>
                 </Card>
               ))}
             </div>
           </TabsContent>
 
-          <TabsContent value="categorias">
-             <div className="grid gap-6 lg:grid-cols-2">
-               <Card>
-                 <CardHeader><CardTitle className="font-serif">Categorias Dinâmicas</CardTitle></CardHeader>
-                 <CardContent className="space-y-4">
-                    <div className="flex gap-2">
-                      <Input placeholder="Nova categoria..." value={newCatLabel} onChange={(e) => setNewCatLabel(e.target.value)} />
-                      <Button onClick={addCategory}><Plus className="h-4 w-4" /></Button>
-                    </div>
-                    <div className="space-y-2">
-                      {cats.map(c => (
-                        <div key={c.slug} className="flex items-center justify-between p-2 border rounded-md">
-                          <span>{c.label}</span>
-                          <Button variant="ghost" size="sm" onClick={() => removeCategory(c.slug)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+          <TabsContent value="categorias" className="mt-6">
+            <div className="grid gap-6 lg:grid-cols-2">
+              <Card>
+                <CardHeader><CardTitle className="font-serif text-xl">Gerenciar categorias</CardTitle></CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex gap-2">
+                    <Input placeholder="Nome da nova categoria (ex: Lua de mel)"
+                      value={newCatLabel} onChange={(e) => setNewCatLabel(e.target.value)} />
+                    <Button onClick={addCategory}><Plus className="mr-1.5 h-4 w-4" /> Adicionar</Button>
+                  </div>
+                  <div className="grid gap-2">
+                    {cats.map((c) => (
+                      <div key={c.slug} className="flex items-center justify-between rounded-lg border border-border p-3">
+                        <div>
+                          <div className="font-medium">{c.label}</div>
+                          <div className="text-xs text-muted-foreground">{c.slug}</div>
                         </div>
-                      ))}
-                    </div>
-                 </CardContent>
-               </Card>
-               <Card>
-                 <CardHeader><CardTitle className="font-serif">Tipos de Oferta (Descontos)</CardTitle></CardHeader>
-                 <CardContent className="space-y-4">
-                    <div className="grid gap-2">
-                      <Input placeholder="Ex: Black Friday" value={newTypeLabel} onChange={(e) => setNewTypeLabel(e.target.value)} />
-                      <div className="flex gap-2">
-                        <Input type="number" placeholder="Desconto %" value={newTypeDiscount} onChange={(e) => setNewTypeDiscount(Number(e.target.value))} />
-                        <Button onClick={addPackageType} className="w-full">Criar Tipo</Button>
+                        <Button variant="ghost" size="sm" onClick={() => removeCategory(c.slug)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
                       </div>
-                    </div>
-                    <div className="space-y-2">
-                      {pkgTypes.map(t => (
-                        <div key={t.slug} className="flex items-center justify-between p-2 border rounded-md">
-                          <span>{t.label} ({t.discount_percent}%)</span>
-                          <Button variant="ghost" size="sm" onClick={() => removePackageType(t.slug)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-serif text-xl">Tipos de pacote</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex gap-2">
+                    <Input placeholder="Ex: Promoção" value={newTypeLabel} onChange={(e) => setNewTypeLabel(e.target.value)} />
+                    <Input type="number" placeholder="Desconto %" min="0" max="100" value={newTypeDiscount} onChange={(e) => setNewTypeDiscount(Number(e.target.value))} className="w-24" />
+                    <Button onClick={addPackageType}><Plus className="mr-1.5 h-4 w-4" /> Adicionar</Button>
+                  </div>
+                  <div className="grid gap-2">
+                    {pkgTypes.map((t) => (
+                      <div key={t.slug} className="flex items-center justify-between rounded-lg border border-border p-3">
+                        <div>
+                          <div className="font-medium">{t.label}</div>
+                          <div className="text-xs text-muted-foreground">{t.discount_percent}% de desconto</div>
                         </div>
-                      ))}
-                    </div>
-                 </CardContent>
-               </Card>
-             </div>
+                        <Button variant="ghost" size="sm" onClick={() => removePackageType(t.slug)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
-          <TabsContent value="reservas"><BookingsPanel /></TabsContent>
-          <TabsContent value="publicacoes"><PublicationsPanel /></TabsContent>
-          <TabsContent value="relatorios"><AccommodationsReport /></TabsContent>
+          <TabsContent value="reservas" className="mt-6">
+            <BookingsPanel />
+          </TabsContent>
+
+          <TabsContent value="publicacoes" className="mt-6">
+            <PublicationsPanel />
+          </TabsContent>
+
+          <TabsContent value="relatorios" className="mt-6">
+            <AccommodationsReport />
+          </TabsContent>
         </Tabs>
 
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent className="max-h-[90vh] overflow-y-auto max-w-2xl">
             <DialogHeader>
-              <DialogTitle className="font-serif text-2xl">{editing ? "Editar" : "Novo"} Pacote</DialogTitle>
-              <DialogDescription>Preencha os dados abaixo para publicar ou atualizar uma viagem.</DialogDescription>
+              <DialogTitle className="font-serif text-2xl">{editing ? "Editar" : "Novo"} pacote</DialogTitle>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="title">Nome da Viagem</Label>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="title">Título</Label>
                 <Input id="title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label>Categoria</Label>
+              <div>
+                <Label htmlFor="description">Descrição</Label>
+                <Textarea id="description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="location">Localização</Label>
+                  <Input id="location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+                </div>
+                <div>
+                  <Label htmlFor="category">Categoria</Label>
                   <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                    <SelectTrigger id="category">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       {cats.map((c) => <SelectItem key={c.slug} value={c.slug}>{c.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid gap-2">
-                  <Label>Tipo/Oferta (Opcional)</Label>
-                  <Select value={form.package_type || "none"} onValueChange={(v) => setForm({ ...form, package_type: v === "none" ? null : v })}>
-                    <SelectTrigger><SelectValue placeholder="Sem oferta" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Nenhum</SelectItem>
-                      {pkgTypes.map((t) => <SelectItem key={t.slug} value={t.slug}>{t.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="departure">Data de partida</Label>
+                  <Input id="departure" type="date" value={form.departure_date} onChange={(e) => setForm({ ...form, departure_date: e.target.value })} />
+                </div>
+                <div>
+                  <Label htmlFor="duration">Duração (dias)</Label>
+                  <Input id="duration" type="number" min="1" value={form.duration_days} onChange={(e) => setForm({ ...form, duration_days: Number(e.target.value) })} />
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label>Partida</Label>
-                  <Input type="date" value={form.departure_date} onChange={(e) => setForm({ ...form, departure_date: e.target.value })} />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="price">Preço (R$)</Label>
+                  <Input id="price" type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} />
                 </div>
-                <div className="grid gap-2">
-                  <Label>Preço (R$)</Label>
-                  <Input type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} />
+                <div>
+                  <Label htmlFor="spots">Vagas totais</Label>
+                  <Input id="spots" type="number" min="1" value={form.total_spots} onChange={(e) => setForm({ ...form, total_spots: Number(e.target.value) })} />
                 </div>
               </div>
-
-              <div className="grid gap-2">
-                <Label>Link da Imagem (Imgur)</Label>
-                <Input placeholder="https://i.imgur.com/..." value={form.cover_image || ""} onChange={(e) => setForm({ ...form, cover_image: e.target.value })} />
+              <div>
+                <Label htmlFor="image">Imagem de capa</Label>
+                <Input id="image" type="file" accept="image/png,image/jpeg" onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0])} disabled={uploading} />
+                {localPreview && <img src={localPreview} alt="preview" className="mt-2 h-32 w-32 rounded object-cover" />}
               </div>
-
-              <div className="grid gap-2">
-                <Label>Descrição Curta</Label>
-                <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+              <div>
+                <Label htmlFor="itinerary">Itinerário</Label>
+                <Textarea id="itinerary" value={form.itinerary} onChange={(e) => setForm({ ...form, itinerary: e.target.value })} rows={2} />
               </div>
-
-              <div className="flex items-center space-x-2 border p-3 rounded-md bg-muted/30">
-                <Switch id="featured" checked={form.is_featured} onCheckedChange={(v) => setForm({ ...form, is_featured: v })} />
-                <Label htmlFor="featured" className="cursor-pointer">Destacar na página inicial</Label>
+              <div>
+                <Label htmlFor="included">Incluído</Label>
+                <Textarea id="included" value={form.included} onChange={(e) => setForm({ ...form, included: e.target.value })} rows={2} />
               </div>
-
-              <div className="flex gap-2 justify-end mt-4">
-                <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
-                <Button onClick={save} className="bg-primary text-white">Salvar Pacote</Button>
+              <div className="flex items-center gap-2">
+                <Switch checked={form.is_featured} onCheckedChange={(v) => setForm({ ...form, is_featured: v })} />
+                <Label>Destacar este pacote</Label>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+                <Button onClick={save} className="bg-gradient-gold text-primary hover:opacity-90">
+                  {editing ? "Atualizar" : "Criar"} pacote
+                </Button>
               </div>
             </div>
           </DialogContent>
