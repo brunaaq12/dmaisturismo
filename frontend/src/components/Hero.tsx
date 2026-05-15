@@ -20,9 +20,9 @@ export const Hero = () => {
       {/* Conteúdo centralizado */}
       <div className="relative z-10 flex min-h-[420px] flex-col items-center justify-center px-4 py-20 text-center md:min-h-[520px]">
         <h1 className="font-serif text-2xl font-bold text-white drop-shadow-lg sm:text-4xl md:text-6xl lg:text-7xl">
-          Sua próxima aventura começa aqui
         </h1>
         <p className="mt-3 max-w-xl text-sm text-white/90 drop-shadow-md sm:mt-5 sm:text-lg md:text-2xl">
+          Sua próxima aventura começa aqui
           Explore com a D+ Turismo
         </p>
         <button
