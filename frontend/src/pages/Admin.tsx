@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Star } from "lucide-react";
@@ -66,7 +66,14 @@ const Admin = () => {
     try {
       const data = await api.get<Pkg[]>("/packages");
       setPkgs(data || []);
-      setPkgTypes([]);
+      
+      // Tenta carregar tipos de pacotes do backend
+      try {
+        const types = await api.get<PkgType[]>("/packages/types");
+        setPkgTypes(types || []);
+      } catch {
+        setPkgTypes([]);
+      }
     } catch (err: any) {
       toast.error("Erro ao carregar pacotes");
     }
@@ -104,7 +111,7 @@ const Admin = () => {
     setForm({ ...empty, category: cats[0]?.slug || "" });
     setOpen(true);
   };
-  
+
   const openEdit = (p: Pkg) => {
     setEditing(p);
     setForm({
@@ -118,38 +125,39 @@ const Admin = () => {
   };
 
   const save = async () => {
-    if (!form.title || !form.description || !form.category) { toast.error("Preencha título, descrição e categoria"); return; }
-    if (!form.departure_date) { toast.error("Informe a data de partida"); return; }
+    if (!form.title || !form.description || !form.category) { 
+      toast.error("Preencha título, descrição e categoria"); 
+      return; 
+    }
+    if (!form.departure_date) { 
+      toast.error("Informe a data de partida"); 
+      return; 
+    }
+
     try {
+      const payload = {
+        ...form,
+        price: Number(form.price),
+        duration_days: Number(form.duration_days),
+        total_spots: Number(form.total_spots),
+        // Na criação, available_spots inicia igual ao total
+        available_spots: editing ? undefined : Number(form.total_spots)
+      };
+
       if (editing) {
-        await api.put(`/packages/${editing.id}`, {
-          title: form.title, description: form.description, location: form.location || form.title,
-          category: form.category, departure_date: form.departure_date,
-          duration_days: Number(form.duration_days), price: Number(form.price),
-          total_spots: Number(form.total_spots), // 🚨 OLHA QUEM FALTAVA AQUI!
-          cover_image: form.cover_image || null, itinerary: form.itinerary || null,
-          included: form.included || null, is_featured: form.is_featured,
-          package_type: form.package_type || null,
-        });
+        await api.put(`/packages/${editing.id}`, payload);
         toast.success("Pacote atualizado");
       } else {
-        await api.post("/packages", {
-          title: form.title, description: form.description,
-          location: form.location || form.title, category: form.category,
-          departure_date: form.departure_date, duration_days: Number(form.duration_days),
-          price: Number(form.price), total_spots: Number(form.total_spots),
-          available_spots: Number(form.total_spots),
-          cover_image: form.cover_image || null, itinerary: form.itinerary || null,
-          included: form.included || null, is_featured: form.is_featured,
-          package_type: form.package_type || null,
-        });
+        await api.post("/packages", payload);
         toast.success("Pacote criado");
       }
-      setOpen(false); fetchAll();
+      setOpen(false); 
+      fetchAll();
     } catch (err: any) {
       toast.error(err.message);
     }
   };
+
   const remove = async (id: string) => {
     if (!confirm("Excluir este pacote?")) return;
     try {
@@ -186,7 +194,7 @@ const Admin = () => {
   };
 
   const removeCategory = async (slug: string) => {
-    if (!confirm(`Excluir a categoria "${slug}"? Pacotes que a utilizam impedem a exclusão.`)) return;
+    if (!confirm(`Excluir a categoria "${slug}"?`)) return;
     try {
       await api.delete(`/packages/categories/${slug}`);
       await fetchCategories(true);
@@ -261,8 +269,7 @@ const Admin = () => {
                 <CardHeader><CardTitle className="font-serif text-xl">Gerenciar categorias</CardTitle></CardHeader>
                 <CardContent className="space-y-6">
                   <div className="flex gap-2">
-                    <Input placeholder="Nome da nova categoria (ex: Lua de mel)"
-                      value={newCatLabel} onChange={(e) => setNewCatLabel(e.target.value)} />
+                    <Input placeholder="Ex: Lua de mel" value={newCatLabel} onChange={(e) => setNewCatLabel(e.target.value)} />
                     <Button onClick={addCategory}><Plus className="mr-1.5 h-4 w-4" /> Adicionar</Button>
                   </div>
                   <div className="grid gap-2">
@@ -282,13 +289,11 @@ const Admin = () => {
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle className="font-serif text-xl">Tipos de pacote</CardTitle>
-                </CardHeader>
+                <CardHeader><CardTitle className="font-serif text-xl">Tipos de pacote</CardTitle></CardHeader>
                 <CardContent className="space-y-6">
                   <div className="flex gap-2">
                     <Input placeholder="Ex: Promoção" value={newTypeLabel} onChange={(e) => setNewTypeLabel(e.target.value)} />
-                    <Input type="number" placeholder="Desconto %" min="0" max="100" value={newTypeDiscount} onChange={(e) => setNewTypeDiscount(Number(e.target.value))} className="w-24" />
+                    <Input type="number" placeholder="Desconto %" value={newTypeDiscount} onChange={(e) => setNewTypeDiscount(Number(e.target.value))} className="w-24" />
                     <Button onClick={addPackageType}><Plus className="mr-1.5 h-4 w-4" /> Adicionar</Button>
                   </div>
                   <div className="grid gap-2">
@@ -326,6 +331,7 @@ const Admin = () => {
           <DialogContent className="max-h-[90vh] overflow-y-auto max-w-2xl">
             <DialogHeader>
               <DialogTitle className="font-serif text-2xl">{editing ? "Editar" : "Novo"} pacote</DialogTitle>
+              <DialogDescription className="sr-only">Formulário para cadastro e edição de pacotes de turismo.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div>
@@ -344,9 +350,7 @@ const Admin = () => {
                 <div>
                   <Label htmlFor="category">Categoria</Label>
                   <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                    <SelectTrigger id="category">
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {cats.map((c) => <SelectItem key={c.slug} value={c.slug}>{c.label}</SelectItem>)}
                     </SelectContent>
@@ -373,37 +377,34 @@ const Admin = () => {
                   <Input id="spots" type="number" min="1" value={form.total_spots} onChange={(e) => setForm({ ...form, total_spots: Number(e.target.value) })} />
                 </div>
               </div>
+              
               <div>
                 <Label htmlFor="image">Link da Imagem de Capa (Imgur)</Label>
                 <Input 
                   id="image" 
                   type="text" 
-                  placeholder="https://i.imgur.com/suafoto.jpg"
-                  value={form.cover_image} 
+                  placeholder="https://i.imgur.com/seulink.jpg"
+                  value={form.cover_image || ""} 
                   onChange={(e) => setForm({ ...form, cover_image: e.target.value })} 
                 />
                 {form.cover_image && (
-                  <img 
-                    src={form.cover_image} 
-                    alt="preview" 
-                    className="mt-2 h-32 w-full rounded-md object-cover" 
-                    onError={(e) => e.currentTarget.src = "/placeholder.svg"}
-                  />
+                  <img src={form.cover_image} alt="preview" className="mt-2 h-32 w-full rounded-md object-cover border" />
                 )}
               </div>
+
               <div>
                 <Label htmlFor="itinerary">Itinerário</Label>
-                <Textarea id="itinerary" value={form.itinerary} onChange={(e) => setForm({ ...form, itinerary: e.target.value })} rows={2} />
+                <Textarea id="itinerary" value={form.itinerary || ""} onChange={(e) => setForm({ ...form, itinerary: e.target.value })} rows={2} />
               </div>
               <div>
                 <Label htmlFor="included">Incluído</Label>
-                <Textarea id="included" value={form.included} onChange={(e) => setForm({ ...form, included: e.target.value })} rows={2} />
+                <Textarea id="included" value={form.included || ""} onChange={(e) => setForm({ ...form, included: e.target.value })} rows={2} />
               </div>
               <div className="flex items-center gap-2">
                 <Switch checked={form.is_featured} onCheckedChange={(v) => setForm({ ...form, is_featured: v })} />
                 <Label>Destacar este pacote</Label>
               </div>
-              <div className="flex gap-2 justify-end">
+              <div className="flex gap-2 justify-end pt-4">
                 <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
                 <Button onClick={save} className="bg-gradient-gold text-primary hover:opacity-90">
                   {editing ? "Atualizar" : "Criar"} pacote
