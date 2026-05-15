@@ -1,25 +1,52 @@
 import { api } from "./api";
 
-// --- LISTA DE MESES (Exigida pelo FilterBar.tsx) ---
-export const MONTHS = [
-  { value: "01", label: "Janeiro" },
-  { value: "02", label: "Fevereiro" },
-  { value: "03", label: "Março" },
-  { value: "04", label: "Abril" },
-  { value: "05", label: "Maio" },
-  { value: "06", label: "Junho" },
-  { value: "07", label: "Julho" },
-  { value: "08", label: "Agosto" },
-  { value: "09", label: "Setembro" },
-  { value: "10", label: "Outubro" },
-  { value: "11", label: "Novembro" },
-  { value: "12", label: "Dezembro" },
-];
-
 export interface CategoryRow {
   slug: string;
   label: string;
 }
+
+let _cache: CategoryRow[] | null = null;
+const _listeners = new Set<(cats: CategoryRow[]) => void>();
+
+export const fetchCategories = async (force = false): Promise<CategoryRow[]> => {
+  if (_cache && !force) return _cache;
+  try {
+  
+    const data: CategoryRow[] = [
+      { slug: "bate_volta", label: "Bate e Volta" },
+      { slug: "casal", label: "Casal" },
+      { slug: "excursao", label: "Excursão" }
+    ];
+    _cache = data;
+    _listeners.forEach((fn) => fn(_cache!));
+    return _cache;
+  } catch (e) {
+    return [];
+  }
+};
+
+export const subscribeCategories = (fn: (cats: CategoryRow[]) => void) => {
+  _listeners.add(fn);
+  if (_cache) fn(_cache);
+  return () => _listeners.delete(fn);
+};
+
+export const labelFor = (slug: string, cats: CategoryRow[]) =>
+  cats.find((c) => c.slug === slug)?.label ?? slug;
+
+export const MONTHS = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+
+export const formatBRL = (n: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
+
+export const formatDate = (iso: string) =>
+  new Date(iso + "T00:00:00").toLocaleDateString("pt-BR", {
+    day: "2-digit", month: "long", year: "numeric",
+  });
+
 
 // --- ESTADO DINÂMICO DAS CATEGORIAS ---
 let currentCategories: CategoryRow[] = [];
@@ -54,30 +81,3 @@ export const fetchCategories = async (force = false) => {
   }
 };
 
-// --- FUNÇÕES UTILITÁRIAS (Exigidas pelo Admin.tsx e Listagens) ---
-
-/**
- * Retorna o nome amigável da categoria ou o slug caso não encontre
- */
-export const labelFor = (slug: string, cats: CategoryRow[]) => {
-  return cats.find((c) => c.slug === slug)?.label || slug;
-};
-
-/**
- * Formata valores numéricos para Real Brasileiro (R$)
- */
-export const formatBRL = (val: number) => {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(val);
-};
-
-/**
- * Formata datas do padrão YYYY-MM-DD para DD/MM/YYYY
- */
-export const formatDate = (dateStr: string) => {
-  if (!dateStr) return "";
-  const [year, month, day] = dateStr.split("-");
-  return `${day}/${month}/${year}`;
-};
