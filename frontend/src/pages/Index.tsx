@@ -234,8 +234,8 @@ const Index = () => {
             </div>
             <div className="sm:text-right">
               <div className="mb-2 text-xs font-semibold uppercase tracking-[0.25em] text-accent">Suporte</div>
-              <a href="mailto:suporte@dmaisturismo.com.br" className="inline-flex items-center gap-2 text-base font-medium hover:text-accent">
-                <Mail className="h-4 w-4" /> suporte@dmaisturismo.com.br
+              <a href="mailto:ddtur.excursoes@outlook.com" className="inline-flex items-center gap-2 text-base font-medium hover:text-accent">
+                <Mail className="h-4 w-4" /> ddtur.excursoes@outlook.com
               </a>
             </div>
           </div>
