@@ -38,7 +38,6 @@ export const BookingsPanel = () => {
     try {
       await bookingsApi.autoCancel();
       const data = await bookingsApi.all();
-      // Only show actionable: aguardando_pagamento, pagamento_finalizado, user-canceled
       setRows(data.filter((b) =>
         b.status === "aguardando_pagamento" ||
         b.status === "pagamento_finalizado" ||
@@ -91,20 +90,34 @@ export const BookingsPanel = () => {
   const exportReport = async () => {
     try {
       const data = await bookingsApi.all({ from: reportFrom, to: reportTo });
-      const sheetData = data.map((b) => ({
-        "Voucher": b.voucher_code || "",
-        "Cliente": b.user_full_name || "",
-        "Email": b.user_email || "",
-        "Telefone": b.user_phone || "",
-        "Pacote": b.packages?.title || "",
-        "Destino": b.packages?.location || "",
-        "Data partida": b.packages?.departure_date ? formatDate(b.packages.departure_date) : "",
-        "Viajantes": b.quantity,
-        "Valor unitário": Number(b.unit_price),
-        "Valor total": Number(b.total_price),
-        "Status": b.status,
-        "Data reserva": formatDate(b.created_at),
-      }));
+
+      // Uma linha por passageiro — se não há passageiros, usa o titular
+      const sheetData: Record<string, unknown>[] = [];
+      for (const b of data) {
+        const passengers: { full_name: string; rg: string }[] = Array.isArray(b.passengers) && b.passengers.length > 0
+          ? b.passengers
+          : [{ full_name: b.user_full_name || "", rg: "" }];
+
+        for (const p of passengers) {
+          sheetData.push({
+            "Voucher": b.voucher_code || "",
+            "Titular": b.user_full_name || "",
+            "Email": b.user_email || "",
+            "Telefone": b.user_phone || "",
+            "Passageiro": p.full_name || "",
+            "RG": p.rg || "",
+            "Pacote": b.packages?.title || "",
+            "Destino": b.packages?.location || "",
+            "Data partida": b.packages?.departure_date ? formatDate(b.packages.departure_date) : "",
+            "Viajantes": b.quantity,
+            "Valor unitário": Number(b.unit_price),
+            "Valor total": Number(b.total_price),
+            "Status": b.status,
+            "Data reserva": formatDate(b.created_at),
+          });
+        }
+      }
+
       const ws = XLSX.utils.json_to_sheet(sheetData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Reservas");
@@ -142,6 +155,21 @@ export const BookingsPanel = () => {
           <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-accent" />{b.user_phone || "—"}</div>
           <div className="flex items-center gap-2 truncate"><Mail className="h-4 w-4 text-accent" /><span className="truncate">{b.user_email || "—"}</span></div>
         </div>
+
+        {/* Passageiros */}
+        {Array.isArray(b.passengers) && b.passengers.length > 0 && (
+          <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2 text-xs space-y-1">
+            <div className="font-medium text-muted-foreground mb-1">Passageiros</div>
+            {b.passengers.map((p, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <UserIcon className="h-3 w-3 text-muted-foreground shrink-0" />
+                <span>{p.full_name}</span>
+                {p.rg && <span className="text-muted-foreground">· RG: {p.rg}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
           <div className="text-muted-foreground">
             Viajantes: <strong className="text-foreground">{b.quantity}</strong> · Total:{" "}
@@ -187,6 +215,7 @@ export const BookingsPanel = () => {
               <div><Label htmlFor="from">De</Label><Input id="from" type="date" value={reportFrom} onChange={(e) => setReportFrom(e.target.value)} /></div>
               <div><Label htmlFor="to">Até</Label><Input id="to" type="date" value={reportTo} onChange={(e) => setReportTo(e.target.value)} /></div>
             </div>
+            <p className="text-xs text-muted-foreground">O Excel gerado terá uma linha por passageiro, incluindo nome e RG de cada um.</p>
             <DialogFooter>
               <Button onClick={exportReport} className="bg-gradient-gold text-primary hover:opacity-90">
                 <FileSpreadsheet className="mr-1.5 h-4 w-4" />Baixar Excel
