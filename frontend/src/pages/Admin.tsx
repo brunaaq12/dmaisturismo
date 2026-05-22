@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { type FC, type ChangeEvent } from "react";
 import { packagesApi, categoriesApi, packageTypesApi, type Package, type PackageType } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { fetchCategories } from "@/lib/categories";
@@ -21,6 +22,7 @@ import { useCategories } from "@/hooks/useCategories";
 import { BookingsPanel } from "@/components/admin/BookingsPanel";
 import { AccommodationsReport } from "@/components/admin/AccommodationsReport";
 import { PublicationsPanel } from "@/components/admin/PublicationsPanel";
+import { SeatsPanel } from "@/components/admin/SeatsPanel";
 import { PaymentSettingsPanel } from "@/components/admin/PaymentSettingsPanel";
 
 const empty = {
@@ -192,6 +194,7 @@ const Admin = () => {
             <TabsTrigger value="reservas">Reservas</TabsTrigger>
             <TabsTrigger value="publicacoes">Publicações</TabsTrigger>
             <TabsTrigger value="relatorios">Relatórios</TabsTrigger>
+            <TabsTrigger value="assentos">Assentos</TabsTrigger>
             <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
           </TabsList>
 
@@ -301,6 +304,7 @@ const Admin = () => {
           <TabsContent value="reservas" className="mt-6"><BookingsPanel /></TabsContent>
           <TabsContent value="publicacoes" className="mt-6"><PublicationsPanel /></TabsContent>
           <TabsContent value="relatorios" className="mt-6"><AccommodationsReport /></TabsContent>
+          <TabsContent value="assentos" className="mt-6"><SeatsPanel /></TabsContent>
           <TabsContent value="pagamentos" className="mt-6"><PaymentSettingsPanel /></TabsContent>
         </Tabs>
 
