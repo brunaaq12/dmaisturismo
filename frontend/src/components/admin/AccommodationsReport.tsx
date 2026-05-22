@@ -24,6 +24,7 @@ interface EntryRow {
   id?: string;
   booking_id: string | null;
   client_name: string;
+  client_rg: string;
   package_title: string;
   pax: number;
   accommodation_type: string;
@@ -44,9 +45,7 @@ export const AccommodationsReport = () => {
   const load = async () => {
     setLoading(true);
     try {
-      // Bookings pagamento_finalizado in period
       const bookings = await bookingsApi.all({ status: "pagamento_finalizado", from, to });
-      // Existing entries
       const entries = await accommodationsApi.list({ from, to }) as (Record<string, unknown> & { booking_id?: string | null; is_manual?: number | boolean })[];
       const byBooking: Record<string, Record<string, unknown>> = {};
       const manuals: Record<string, unknown>[] = [];
@@ -55,31 +54,42 @@ export const AccommodationsReport = () => {
         else byBooking[e.booking_id as string] = e;
       });
 
-      const bookingRows: EntryRow[] = bookings.map((b) => {
+      // Expand one row per passenger
+      const bookingRows: EntryRow[] = [];
+      for (const b of bookings) {
         const e = byBooking[b.id];
-        return {
-          id: e?.id as string | undefined,
-          booking_id: b.id,
-          client_name: (e?.client_name as string) ?? (b.user_full_name ?? ""),
-          package_title: (e?.package_title as string) ?? (b.packages?.title ?? ""),
-          pax: Number(e?.pax ?? b.quantity),
-          accommodation_type: (e?.accommodation_type as string) ?? "casal",
-          obs: (e?.obs as string) ?? "",
-          purchase_type: (e?.purchase_type as string) ?? "site",
-          is_manual: false,
-          dirty: false,
-        };
-      });
+        const passengers: { full_name: string; rg: string }[] =
+          Array.isArray(b.passengers) && b.passengers.length > 0
+            ? b.passengers
+            : [{ full_name: b.user_full_name ?? "", rg: "" }];
+
+        for (const p of passengers) {
+          bookingRows.push({
+            id: e?.id as string | undefined,
+            booking_id: b.id,
+            client_name: (e?.client_name as string) ?? p.full_name,
+            client_rg: (e?.client_rg as string) ?? p.rg ?? "",
+            package_title: (e?.package_title as string) ?? (b.packages?.title ?? ""),
+            pax: Number(e?.pax ?? b.quantity),
+            accommodation_type: (e?.accommodation_type as string) ?? "casal",
+            obs: (e?.obs as string) ?? "",
+            purchase_type: (e?.purchase_type as string) ?? "site",
+            is_manual: false,
+            dirty: false,
+          });
+        }
+      }
 
       const manualRows: EntryRow[] = manuals.map((e) => ({
         id: e.id as string,
         booking_id: null,
         client_name: (e.client_name as string) ?? "",
+        client_rg: (e.client_rg as string) ?? "",
         package_title: (e.package_title as string) ?? "",
         pax: Number(e.pax ?? 1),
         accommodation_type: (e.accommodation_type as string) ?? "casal",
         obs: (e.obs as string) ?? "",
-        purchase_type: (e.purchase_type as string) ?? "site",
+        purchase_type: (e.purchase_type as string) ?? "whatsapp",
         is_manual: true,
         dirty: false,
       }));
@@ -99,7 +109,8 @@ export const AccommodationsReport = () => {
   const saveRow = async (idx: number) => {
     const r = rows[idx];
     const payload = {
-      client_name: r.client_name, package_title: r.package_title,
+      client_name: r.client_name, client_rg: r.client_rg,
+      package_title: r.package_title,
       pax: r.pax, accommodation_type: r.accommodation_type,
       obs: r.obs, purchase_type: r.purchase_type,
       is_manual: r.is_manual, booking_id: r.booking_id,
@@ -119,7 +130,7 @@ export const AccommodationsReport = () => {
 
   const addManual = () => {
     setRows((prev) => [...prev, {
-      booking_id: null, client_name: "", package_title: "",
+      booking_id: null, client_name: "", client_rg: "", package_title: "",
       pax: 1, accommodation_type: "casal", obs: "",
       purchase_type: "whatsapp", is_manual: true, dirty: true,
     }]);
@@ -137,9 +148,13 @@ export const AccommodationsReport = () => {
 
   const exportXLSX = () => {
     const data = rows.map((r) => ({
-      "Cliente": r.client_name, "Pacote": r.package_title,
-      "Pax": r.pax, "Acomodação": r.accommodation_type,
-      "Obs": r.obs, "Via": r.purchase_type,
+      "Cliente": r.client_name,
+      "RG": r.client_rg,
+      "Pacote": r.package_title,
+      "Pax": r.pax,
+      "Acomodação": r.accommodation_type,
+      "Obs": r.obs,
+      "Via": r.purchase_type,
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -170,6 +185,7 @@ export const AccommodationsReport = () => {
               <thead>
                 <tr className="border-b border-border text-left text-xs text-muted-foreground">
                   <th className="pb-2 pr-3 font-medium">Cliente</th>
+                  <th className="pb-2 pr-3 font-medium">RG</th>
                   <th className="pb-2 pr-3 font-medium">Pacote</th>
                   <th className="pb-2 pr-3 font-medium w-16">Pax</th>
                   <th className="pb-2 pr-3 font-medium">Acomodação</th>
@@ -182,6 +198,7 @@ export const AccommodationsReport = () => {
                 {rows.map((r, idx) => (
                   <tr key={idx} className="border-b border-border/50">
                     <td className="py-2 pr-3"><Input value={r.client_name} onChange={(e) => updateRow(idx, "client_name", e.target.value)} className="h-8 text-xs" /></td>
+                    <td className="py-2 pr-3"><Input value={r.client_rg} onChange={(e) => updateRow(idx, "client_rg", e.target.value)} className="h-8 text-xs w-28" placeholder="RG" /></td>
                     <td className="py-2 pr-3"><Input value={r.package_title} onChange={(e) => updateRow(idx, "package_title", e.target.value)} className="h-8 text-xs" /></td>
                     <td className="py-2 pr-3"><Input type="number" min={1} value={r.pax} onChange={(e) => updateRow(idx, "pax", Number(e.target.value))} className="h-8 text-xs w-16" /></td>
                     <td className="py-2 pr-3">
@@ -206,7 +223,7 @@ export const AccommodationsReport = () => {
                   </tr>
                 ))}
                 {rows.length === 0 && !loading && (
-                  <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">Nenhum registro encontrado.</td></tr>
+                  <tr><td colSpan={8} className="py-8 text-center text-muted-foreground">Nenhum registro encontrado.</td></tr>
                 )}
               </tbody>
             </table>
