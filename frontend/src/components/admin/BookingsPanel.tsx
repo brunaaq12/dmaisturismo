@@ -96,7 +96,7 @@ export const BookingsPanel = () => {
       for (const b of data) {
         const passengers: { full_name: string; rg: string }[] = Array.isArray(b.passengers) && b.passengers.length > 0
           ? b.passengers
-          : [{ full_name: b.user_full_name || "", rg: "" }];
+          : [{ full_name: b.user_full_name || "", rg: b.user_rg || "" }];
 
         for (const p of passengers) {
           sheetData.push({
@@ -154,6 +154,12 @@ export const BookingsPanel = () => {
           <div className="flex items-center gap-2"><UserIcon className="h-4 w-4 text-accent" />{b.user_full_name || "—"}</div>
           <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-accent" />{b.user_phone || "—"}</div>
           <div className="flex items-center gap-2 truncate"><Mail className="h-4 w-4 text-accent" /><span className="truncate">{b.user_email || "—"}</span></div>
+          {b.user_rg && (
+            <div className="flex items-center gap-2 sm:col-span-3 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">RG do titular:</span>
+              <span className="font-mono">{b.user_rg}</span>
+            </div>
+          )}
         </div>
 
         {/* Passageiros */}
