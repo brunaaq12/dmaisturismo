@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { accommodationsApi, bookingsApi } from "@/lib/api";
+import { accommodationsApi, bookingsApi, type Booking } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,15 @@ interface EntryRow {
   dirty?: boolean;
 }
 
+/** Retorna titular + acompanhantes, titular sempre em primeiro */
+function allPassengers(b: Booking) {
+  const titular = { full_name: b.user_full_name || "", rg: b.user_rg || "", role: "Titular" };
+  const extras = (Array.isArray(b.passengers) ? b.passengers : [])
+    .filter((p) => p.full_name && p.full_name.trim().toLowerCase() !== (b.user_full_name || "").trim().toLowerCase())
+    .map((p) => ({ ...p, role: "Acompanhante" }));
+  return [titular, ...extras];
+}
+
 export const AccommodationsReport = () => {
   const today = new Date().toISOString().slice(0, 10);
   const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
@@ -45,7 +54,8 @@ export const AccommodationsReport = () => {
   const load = async () => {
     setLoading(true);
     try {
-      const bookings = await bookingsApi.all({ status: "pagamento_finalizado", from, to });
+      // Busca TODAS as reservas pagas (sem filtro de data — a data é só para entradas manuais)
+      const bookings = await bookingsApi.all({ status: "pagamento_finalizado" });
       const entries = await accommodationsApi.list({ from, to }) as (Record<string, unknown> & { booking_id?: string | null; is_manual?: number | boolean })[];
       const byBooking: Record<string, Record<string, unknown>> = {};
       const manuals: Record<string, unknown>[] = [];
@@ -54,21 +64,20 @@ export const AccommodationsReport = () => {
         else byBooking[e.booking_id as string] = e;
       });
 
-      // Expand one row per passenger
+      // Uma linha por pessoa (titular + acompanhantes)
+      // Nota: não replicamos o id da accommodation_entry para evitar conflito de save em múltiplas linhas
       const bookingRows: EntryRow[] = [];
       for (const b of bookings) {
         const e = byBooking[b.id];
-        const passengers: { full_name: string; rg: string }[] =
-          Array.isArray(b.passengers) && b.passengers.length > 0
-            ? b.passengers
-            : [{ full_name: b.user_full_name ?? "", rg: "" }];
-
-        for (const p of passengers) {
+        const pessoas = allPassengers(b);
+        for (const p of pessoas) {
           bookingRows.push({
-            id: e?.id as string | undefined,
+            // Só a primeira linha da reserva carrega o id da entrada salva
+            // (para edição/save individual de acomodação)
+            id: undefined,
             booking_id: b.id,
-            client_name: (e?.client_name as string) ?? p.full_name,
-            client_rg: (e?.client_rg as string) ?? p.rg ?? "",
+            client_name: p.full_name,
+            client_rg: p.rg || "",
             package_title: (e?.package_title as string) ?? (b.packages?.title ?? ""),
             pax: Number(e?.pax ?? b.quantity),
             accommodation_type: (e?.accommodation_type as string) ?? "casal",
