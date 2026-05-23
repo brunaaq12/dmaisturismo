@@ -38,6 +38,17 @@ const BookingsList = ({ rows, emptyMsg, onCancel }: { rows: Booking[]; emptyMsg:
               </div>
               <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs whitespace-nowrap ${st.cls}`}>{st.label}</span>
             </div>
+            {/* Titular da reserva */}
+            {(b.user_full_name || b.user_rg) && (
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground rounded bg-muted/40 px-3 py-2">
+                {b.user_full_name && (
+                  <span><span className="font-medium text-foreground">Titular:</span> {b.user_full_name}</span>
+                )}
+                {b.user_rg && (
+                  <span><span className="font-medium text-foreground">RG:</span> <span className="font-mono">{b.user_rg}</span></span>
+                )}
+              </div>
+            )}
             <div className="flex items-center justify-between text-xs text-muted-foreground flex-wrap gap-2">
               <span>Reservado em {new Date(b.created_at).toLocaleDateString("pt-BR")}</span>
               <span>{b.quantity} viajante(s)</span>
