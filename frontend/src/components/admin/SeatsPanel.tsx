@@ -14,9 +14,19 @@ import * as XLSX from "xlsx";
 interface PassengerRow {
   passageiro: string;
   rg: string;
+  funcao: string;
   voucher: string;
   assentoNum: string;
   confirmado: boolean;
+}
+
+/** Retorna titular + acompanhantes, titular sempre em primeiro */
+function allPassengers(b: Booking) {
+  const titular = { full_name: b.user_full_name || "", rg: b.user_rg || "", role: "Titular" };
+  const extras = (Array.isArray(b.passengers) ? b.passengers : [])
+    .filter((p) => p.full_name && p.full_name.trim().toLowerCase() !== (b.user_full_name || "").trim().toLowerCase())
+    .map((p) => ({ ...p, role: "Acompanhante" }));
+  return [titular, ...extras];
 }
 
 export const SeatsPanel = () => {
@@ -27,7 +37,6 @@ export const SeatsPanel = () => {
   const [loadingBookings, setLoadingBookings] = useState(false);
   const [rows, setRows] = useState<PassengerRow[]>([]);
 
-  // Load all packages
   useEffect(() => {
     packagesApi.all()
       .then((pkgs) => setPackages(pkgs))
@@ -35,7 +44,6 @@ export const SeatsPanel = () => {
       .finally(() => setLoadingPkgs(false));
   }, []);
 
-  // When package is selected, load bookings with pagamento_finalizado
   const handlePkgChange = async (pkgId: string) => {
     setSelectedPkgId(pkgId);
     setRows([]);
@@ -44,23 +52,20 @@ export const SeatsPanel = () => {
 
     setLoadingBookings(true);
     try {
-      const all = await bookingsApi.all({ status: "pagamento_finalizado" });
-      const filtered = all.filter((b) => b.package_id === pkgId);
+      // Filtra direto no backend por package_id + status — evita carregar todas as reservas
+      const filtered = await bookingsApi.all({ status: "pagamento_finalizado", package_id: pkgId });
       setBookings(filtered);
 
-      // Expand passengers
-      const expanded: PassengerRow[] = [];
       let seatCounter = 1;
-      for (const b of filtered) {
-        const passengers: { full_name: string; rg: string }[] =
-          Array.isArray(b.passengers) && b.passengers.length > 0
-            ? b.passengers
-            : [{ full_name: b.user_full_name ?? "", rg: "" }];
+      const expanded: PassengerRow[] = [];
 
-        for (const p of passengers) {
+      for (const b of filtered) {
+        const pessoas = allPassengers(b);
+        for (const p of pessoas) {
           expanded.push({
             passageiro: p.full_name,
             rg: p.rg || "",
+            funcao: p.role,
             voucher: b.voucher_code || "",
             assentoNum: String(seatCounter++),
             confirmado: false,
@@ -80,37 +85,26 @@ export const SeatsPanel = () => {
   };
 
   const selectedPkg = packages.find((p) => p.id === selectedPkgId);
+  const confirmedCount = rows.filter((r) => r.confirmado).length;
 
   const exportXLSX = () => {
     if (!rows.length) { toast.error("Nenhum passageiro para exportar"); return; }
-
     const data = rows.map((r) => ({
       "Nº Assento": r.assentoNum,
+      "Função":     r.funcao,
       "Passageiro": r.passageiro,
-      "RG": r.rg,
-      "Voucher": r.voucher,
+      "RG":         r.rg,
+      "Voucher":    r.voucher,
       "Confirmado": r.confirmado ? "Sim" : "Não",
     }));
-
     const ws = XLSX.utils.json_to_sheet(data);
-
-    // Column widths
-    ws["!cols"] = [
-      { wch: 12 },
-      { wch: 30 },
-      { wch: 16 },
-      { wch: 18 },
-      { wch: 12 },
-    ];
-
+    ws["!cols"] = [{ wch: 12 }, { wch: 14 }, { wch: 30 }, { wch: 16 }, { wch: 18 }, { wch: 12 }];
     const wb = XLSX.utils.book_new();
     const pkgTitle = selectedPkg?.title?.replace(/[^a-zA-Z0-9]/g, "-").slice(0, 30) || "pacote";
     XLSX.utils.book_append_sheet(wb, ws, "Assentos");
     XLSX.writeFile(wb, `assentos-${pkgTitle}.xlsx`);
     toast.success(`${rows.length} assento(s) exportado(s)`);
   };
-
-  const confirmedCount = rows.filter((r) => r.confirmado).length;
 
   return (
     <div className="space-y-6">
@@ -126,7 +120,6 @@ export const SeatsPanel = () => {
         </CardHeader>
         <CardContent className="space-y-6">
 
-          {/* Package selector */}
           <div className="max-w-sm">
             <Label>Pacote</Label>
             <Select value={selectedPkgId || "__none__"} onValueChange={handlePkgChange} disabled={loadingPkgs}>
@@ -149,7 +142,6 @@ export const SeatsPanel = () => {
             </Select>
           </div>
 
-          {/* Summary badges */}
           {selectedPkgId && selectedPkgId !== "__none__" && !loadingBookings && (
             <div className="flex flex-wrap gap-2 text-sm">
               <Badge variant="outline" className="text-emerald-700 border-emerald-300 bg-emerald-50">
@@ -164,25 +156,23 @@ export const SeatsPanel = () => {
             </div>
           )}
 
-          {/* Loading state */}
           {loadingBookings && (
             <p className="text-sm text-muted-foreground animate-pulse">Carregando passageiros...</p>
           )}
 
-          {/* Empty state */}
           {!loadingBookings && selectedPkgId && selectedPkgId !== "__none__" && rows.length === 0 && (
             <div className="rounded-lg border border-border py-10 text-center text-muted-foreground text-sm">
               Nenhum passageiro com pagamento finalizado para este pacote.
             </div>
           )}
 
-          {/* Seats table */}
           {rows.length > 0 && (
             <div className="overflow-x-auto rounded-lg border border-border">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-muted/50 text-left text-xs text-muted-foreground border-b border-border">
                     <th className="px-4 py-3 font-medium w-28">Nº Assento</th>
+                    <th className="px-4 py-3 font-medium w-28">Função</th>
                     <th className="px-4 py-3 font-medium">Passageiro</th>
                     <th className="px-4 py-3 font-medium w-36">RG</th>
                     <th className="px-4 py-3 font-medium w-36">Voucher</th>
@@ -193,7 +183,10 @@ export const SeatsPanel = () => {
                   {rows.map((r, idx) => (
                     <tr
                       key={idx}
-                      className={`border-b border-border/50 transition-colors ${r.confirmado ? "bg-emerald-50/50" : "hover:bg-muted/30"}`}
+                      className={`border-b border-border/50 transition-colors ${
+                        r.confirmado ? "bg-emerald-50/50" :
+                        r.funcao === "Titular" ? "bg-primary/5" : "hover:bg-muted/30"
+                      }`}
                     >
                       <td className="px-4 py-2">
                         <Input
@@ -204,7 +197,14 @@ export const SeatsPanel = () => {
                         />
                       </td>
                       <td className="px-4 py-2">
-                        <div className="font-medium">{r.passageiro || <span className="text-muted-foreground italic">—</span>}</div>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${
+                          r.funcao === "Titular"
+                            ? "bg-primary/10 text-primary"
+                            : "bg-muted text-muted-foreground"
+                        }`}>{r.funcao}</span>
+                      </td>
+                      <td className="px-4 py-2 font-medium">
+                        {r.passageiro || <span className="text-muted-foreground italic">—</span>}
                       </td>
                       <td className="px-4 py-2">
                         <span className="text-muted-foreground text-xs font-mono">{r.rg || "—"}</span>
@@ -226,7 +226,6 @@ export const SeatsPanel = () => {
             </div>
           )}
 
-          {/* Export button — always at bottom, enabled when rows exist */}
           {rows.length > 0 && (
             <div className="flex justify-end pt-2 border-t border-border">
               <Button onClick={exportXLSX} className="bg-gradient-gold text-primary hover:opacity-90 shadow-gold">
