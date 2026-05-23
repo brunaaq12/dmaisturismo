@@ -53,13 +53,17 @@ export const SeatsPanel = () => {
     setLoadingBookings(true);
     try {
       // Filtra direto no backend por package_id + status — evita carregar todas as reservas
+      // A API já suporta filtrar por status e package_id através da query string
       const filtered = await bookingsApi.all({ status: "pagamento_finalizado", package_id: pkgId });
-      setBookings(filtered);
+      
+      // Filtro adicional de segurança no frontend para garantir que apenas 'pagamento_finalizado' seja exibido
+      const confirmedBookings = filtered.filter(b => b.status === "pagamento_finalizado");
+      setBookings(confirmedBookings);
 
       let seatCounter = 1;
       const expanded: PassengerRow[] = [];
 
-      for (const b of filtered) {
+      for (const b of confirmedBookings) {
         const pessoas = allPassengers(b);
         for (const p of pessoas) {
           expanded.push({
