@@ -24,6 +24,21 @@ const buildWhatsappUrl = (phone: string | null | undefined, message: string) => 
   return `https://wa.me/${intl}?text=${encodeURIComponent(message)}`;
 };
 
+/** Retorna SEMPRE: [titular, ...acompanhantes]
+ *  O titular nunca é omitido; acompanhantes são os passengers que
+ *  têm nome diferente do titular (evita duplicata). */
+function allPassengers(b: Booking) {
+  const titular = {
+    full_name: b.user_full_name || "",
+    rg: b.user_rg || "",
+    role: "Titular",
+  };
+  const extras = (Array.isArray(b.passengers) ? b.passengers : [])
+    .filter((p) => p.full_name && p.full_name.trim().toLowerCase() !== (b.user_full_name || "").trim().toLowerCase())
+    .map((p) => ({ ...p, role: "Acompanhante" }));
+  return [titular, ...extras];
+}
+
 export const BookingsPanel = () => {
   const [rows, setRows] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,30 +105,28 @@ export const BookingsPanel = () => {
   const exportReport = async () => {
     try {
       const data = await bookingsApi.all({ from: reportFrom, to: reportTo });
-
-      // Uma linha por passageiro — se não há passageiros, usa o titular
       const sheetData: Record<string, unknown>[] = [];
-      for (const b of data) {
-        const passengers: { full_name: string; rg: string }[] = Array.isArray(b.passengers) && b.passengers.length > 0
-          ? b.passengers
-          : [{ full_name: b.user_full_name || "", rg: b.user_rg || "" }];
 
-        for (const p of passengers) {
+      for (const b of data) {
+        const pessoas = allPassengers(b);
+        for (const p of pessoas) {
           sheetData.push({
-            "Voucher": b.voucher_code || "",
-            "Titular": b.user_full_name || "",
-            "Email": b.user_email || "",
-            "Telefone": b.user_phone || "",
-            "Passageiro": p.full_name || "",
-            "RG": p.rg || "",
-            "Pacote": b.packages?.title || "",
-            "Destino": b.packages?.location || "",
-            "Data partida": b.packages?.departure_date ? formatDate(b.packages.departure_date) : "",
-            "Viajantes": b.quantity,
+            "Voucher":        b.voucher_code || "",
+            "Titular":        b.user_full_name || "",
+            "RG Titular":     b.user_rg || "",
+            "Email":          b.user_email || "",
+            "Telefone":       b.user_phone || "",
+            "Função":         p.role,
+            "Nome":           p.full_name || "",
+            "RG":             p.rg || "",
+            "Pacote":         b.packages?.title || "",
+            "Destino":        b.packages?.location || "",
+            "Data partida":   b.packages?.departure_date ? formatDate(b.packages.departure_date) : "",
+            "Viajantes":      b.quantity,
             "Valor unitário": Number(b.unit_price),
-            "Valor total": Number(b.total_price),
-            "Status": b.status,
-            "Data reserva": formatDate(b.created_at),
+            "Valor total":    Number(b.total_price),
+            "Status":         b.status,
+            "Data reserva":   formatDate(b.created_at),
           });
         }
       }
@@ -131,79 +144,80 @@ export const BookingsPanel = () => {
   const finalizadas = useMemo(() => rows.filter((r) => r.status === "pagamento_finalizado"), [rows]);
   const canceladasUsuario = useMemo(() => rows.filter((r) => r.status === "cancelado" && r.canceled_by === "user"), [rows]);
 
-  const renderCard = (b: Booking) => (
-    <Card key={b.id} className="shadow-card-soft">
-      <CardContent className="p-5 space-y-3">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <div className="font-serif text-lg font-bold">{b.packages?.title || "Pacote"}</div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-              {b.packages?.location} · {b.packages?.departure_date && formatDate(b.packages.departure_date)}
+  const renderCard = (b: Booking) => {
+    const pessoas = allPassengers(b);
+    return (
+      <Card key={b.id} className="shadow-card-soft">
+        <CardContent className="p-5 space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <div className="font-serif text-lg font-bold">{b.packages?.title || "Pacote"}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                {b.packages?.location} · {b.packages?.departure_date && formatDate(b.packages.departure_date)}
+              </div>
             </div>
+            <Badge className={
+              b.status === "pagamento_finalizado" ? "bg-emerald-100 text-emerald-900 hover:bg-emerald-100"
+              : b.status === "cancelado" ? "bg-red-100 text-red-900 hover:bg-red-100"
+              : "bg-sky-100 text-sky-900 hover:bg-sky-100"}>
+              {b.status === "pagamento_finalizado" ? "Pagamento finalizado"
+                : b.status === "cancelado" ? "Cancelado pelo usuário"
+                : "Aguardando pagamento"}
+            </Badge>
           </div>
-          <Badge className={
-            b.status === "pagamento_finalizado" ? "bg-emerald-100 text-emerald-900 hover:bg-emerald-100"
-            : b.status === "cancelado" ? "bg-red-100 text-red-900 hover:bg-red-100"
-            : "bg-sky-100 text-sky-900 hover:bg-sky-100"}>
-            {b.status === "pagamento_finalizado" ? "Pagamento finalizado"
-              : b.status === "cancelado" ? "Cancelado pelo usuário"
-              : "Aguardando pagamento"}
-          </Badge>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-3 text-sm rounded-lg bg-muted/40 p-3">
-          <div className="flex items-center gap-2"><UserIcon className="h-4 w-4 text-accent" />{b.user_full_name || "—"}</div>
-          <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-accent" />{b.user_phone || "—"}</div>
-          <div className="flex items-center gap-2 truncate"><Mail className="h-4 w-4 text-accent" /><span className="truncate">{b.user_email || "—"}</span></div>
-          {b.user_rg && (
-            <div className="flex items-center gap-2 sm:col-span-3 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">RG do titular:</span>
-              <span className="font-mono">{b.user_rg}</span>
-            </div>
-          )}
-        </div>
 
-        {/* Passageiros */}
-        {Array.isArray(b.passengers) && b.passengers.length > 0 && (
-          <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2 text-xs space-y-1">
+          {/* Contato do titular */}
+          <div className="grid gap-2 sm:grid-cols-3 text-sm rounded-lg bg-muted/40 p-3">
+            <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-accent" />{b.user_phone || "—"}</div>
+            <div className="flex items-center gap-2 truncate sm:col-span-2"><Mail className="h-4 w-4 text-accent" /><span className="truncate">{b.user_email || "—"}</span></div>
+          </div>
+
+          {/* Todos os passageiros: titular + acompanhantes */}
+          <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2 text-xs space-y-1.5">
             <div className="font-medium text-muted-foreground mb-1">Passageiros</div>
-            {b.passengers.map((p, i) => (
-              <div key={i} className="flex items-center gap-2">
+            {pessoas.map((p, i) => (
+              <div key={i} className="flex items-center gap-2 flex-wrap">
                 <UserIcon className="h-3 w-3 text-muted-foreground shrink-0" />
-                <span>{p.full_name}</span>
-                {p.rg && <span className="text-muted-foreground">· RG: {p.rg}</span>}
+                <span className="font-medium">{p.full_name || "—"}</span>
+                {p.rg && <span className="text-muted-foreground">· RG: <span className="font-mono">{p.rg}</span></span>}
+                <span className={`ml-auto px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                  p.role === "Titular"
+                    ? "bg-primary/10 text-primary"
+                    : "bg-muted text-muted-foreground"
+                }`}>{p.role}</span>
               </div>
             ))}
           </div>
-        )}
 
-        <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-          <div className="text-muted-foreground">
-            Viajantes: <strong className="text-foreground">{b.quantity}</strong> · Total:{" "}
-            <strong className="text-primary">{formatBRL(Number(b.total_price))}</strong> ·{" "}
-            <span className="font-mono text-xs">{b.voucher_code}</span>
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+            <div className="text-muted-foreground">
+              Viajantes: <strong className="text-foreground">{b.quantity}</strong> · Total:{" "}
+              <strong className="text-primary">{formatBRL(Number(b.total_price))}</strong> ·{" "}
+              <span className="font-mono text-xs">{b.voucher_code}</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {b.status !== "cancelado" && (
+                <>
+                  <Button size="sm" variant="outline" onClick={() => handleContact(b)}
+                    className="border-emerald-600 text-emerald-700 hover:bg-emerald-50">
+                    <MessageCircle className="mr-1.5 h-4 w-4" />Contatar
+                  </Button>
+                  <Button size="sm" onClick={() => handleGenerateVoucher(b)}
+                    className="bg-gradient-gold text-primary hover:opacity-90 shadow-gold">
+                    <FileDown className="mr-1.5 h-4 w-4" />
+                    {b.status === "pagamento_finalizado" ? "Reenviar voucher" : "Gerar voucher"}
+                  </Button>
+                </>
+              )}
+              <Button size="sm" variant="outline" onClick={() => handleDelete(b)}>
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {b.status !== "cancelado" && (
-              <>
-                <Button size="sm" variant="outline" onClick={() => handleContact(b)}
-                  className="border-emerald-600 text-emerald-700 hover:bg-emerald-50">
-                  <MessageCircle className="mr-1.5 h-4 w-4" />Contatar
-                </Button>
-                <Button size="sm" onClick={() => handleGenerateVoucher(b)}
-                  className="bg-gradient-gold text-primary hover:opacity-90 shadow-gold">
-                  <FileDown className="mr-1.5 h-4 w-4" />
-                  {b.status === "pagamento_finalizado" ? "Reenviar voucher" : "Gerar voucher"}
-                </Button>
-              </>
-            )}
-            <Button size="sm" variant="outline" onClick={() => handleDelete(b)}>
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <div className="space-y-8">
@@ -221,7 +235,7 @@ export const BookingsPanel = () => {
               <div><Label htmlFor="from">De</Label><Input id="from" type="date" value={reportFrom} onChange={(e) => setReportFrom(e.target.value)} /></div>
               <div><Label htmlFor="to">Até</Label><Input id="to" type="date" value={reportTo} onChange={(e) => setReportTo(e.target.value)} /></div>
             </div>
-            <p className="text-xs text-muted-foreground">O Excel gerado terá uma linha por passageiro, incluindo nome e RG de cada um.</p>
+            <p className="text-xs text-muted-foreground">O Excel terá uma linha por pessoa: titular sempre incluso + acompanhantes cadastrados.</p>
             <DialogFooter>
               <Button onClick={exportReport} className="bg-gradient-gold text-primary hover:opacity-90">
                 <FileSpreadsheet className="mr-1.5 h-4 w-4" />Baixar Excel
