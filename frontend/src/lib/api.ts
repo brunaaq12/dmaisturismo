@@ -152,11 +152,12 @@ export interface Booking {
   user_full_name?: string;
   user_phone?: string;
   user_email?: string;
+  user_rg?: string;
 }
 
 export const bookingsApi = {
   mine: () => get<Booking[]>("/api/bookings/mine"),
-  all: (params?: { status?: string; from?: string; to?: string }) => {
+  all: (params?: { status?: string; from?: string; to?: string; package_id?: string }) => {
     const qs = new URLSearchParams(
       Object.entries(params ?? {}).filter(([, v]) => v) as [string, string][]
     ).toString();
