@@ -30,7 +30,27 @@ export const MONTHS = [
 export const formatBRL = (n: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
 
-export const formatDate = (iso: string) =>
-  new Date(iso + "T00:00:00").toLocaleDateString("pt-BR", {
-    day: "2-digit", month: "long", year: "numeric",
+/**
+ * Formata strings de data de forma segura.
+ * Lida tanto com o formato simples (YYYY-MM-DD) quanto ISO completo (com hora).
+ */
+export const formatDate = (iso: string) => {
+  if (!iso) return "";
+
+  // Se a string já possuir indicativo de hora (T ou espaço), usamos o formato original.
+  // Se for apenas a data YYYY-MM-DD, anexamos o T00:00:00 para evitar quebras de fuso horário.
+  const dateStr = iso.includes("T") || iso.includes(" ") ? iso : `${iso}T00:00:00`;
+  
+  const date = new Date(dateStr);
+
+  // Fallback caso chegue uma string corrompida ou inválida por completo
+  if (isNaN(date.getTime())) {
+    return "Data inválida";
+  }
+
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
   });
+};
