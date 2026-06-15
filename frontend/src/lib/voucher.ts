@@ -7,15 +7,30 @@ export interface VoucherData {
   total_price: number;
   unit_price?: number;
   created_at?: string;
-  customer: { full_name?: string | null; email?: string | null; phone?: string | null };
-  package: {
-    title?: string; location?: string; departure_date?: string; duration_days?: number;
+  customer: { 
+    full_name?: string | null; 
+    email?: string | null; 
+    phone?: string | null;
+    rg?: string | null;
   };
+  package: {
+    title?: string; 
+    location?: string; 
+    departure_date?: string; 
+    duration_days?: number;
+    hotel_name?: string | null;
+    itinerary_main?: string | null;
+    itinerary_farewell?: string | null;
+    itinerary_return?: string | null;
+  };
+  passengers?: { full_name: string; rg: string; role: string }[];
+  accommodation_type?: string;
 }
 
 export const generateVoucherPDF = (v: VoucherData) => {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
 
   // Header
   doc.setFillColor(15, 27, 61);
@@ -39,6 +54,7 @@ export const generateVoucherPDF = (v: VoucherData) => {
 
   let y = 70;
   const section = (title: string) => {
+    if (y > H - 30) { doc.addPage(); y = 20; }
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
     doc.setTextColor(15, 27, 61);
@@ -47,7 +63,9 @@ export const generateVoucherPDF = (v: VoucherData) => {
     doc.line(15, y + 1.5, W - 15, y + 1.5);
     y += 8;
   };
-  const row = (label: string, value: string) => {
+
+  const row = (label: string, value: string, inline = false) => {
+    if (y > H - 20) { doc.addPage(); y = 20; }
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(120);
@@ -56,33 +74,117 @@ export const generateVoucherPDF = (v: VoucherData) => {
     doc.setFontSize(11);
     doc.setTextColor(30);
     doc.text(value || "—", 15, y + 5);
-    y += 12;
+    if (!inline) y += 12;
   };
 
-  section("Dados do cliente");
-  row("Nome", v.customer.full_name || "—");
-  row("E-mail", v.customer.email || "—");
-  row("Contato", v.customer.phone || "—");
+  section("Dados do Titular");
+  row("Nome", v.customer.full_name || "—", true);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(120);
+  doc.text("RG", 120, y);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(30);
+  doc.text(v.customer.rg || "—", 120, y + 5);
+  y += 12;
+  row("E-mail", v.customer.email || "—", true);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(120);
+  doc.text("Contato", 120, y);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(30);
+  doc.text(v.customer.phone || "—", 120, y + 5);
+  y += 12;
 
-  y += 2;
-  section("Pacote");
+  if (v.passengers && v.passengers.length > 0) {
+    section("Todos os Passageiros");
+    v.passengers.forEach((p) => {
+      if (y > H - 15) { doc.addPage(); y = 20; }
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(30);
+      doc.text(`${p.full_name} - RG: ${p.rg || "—"} (${p.role})`, 15, y);
+      y += 6;
+    });
+    y += 4;
+  }
+
+  section("Pacote e Hospedagem");
   row("Título", v.package.title || "—");
-  row("Destino", v.package.location || "—");
-  row("Data de partida", v.package.departure_date ? formatDate(v.package.departure_date) : "—");
-  if (v.package.duration_days) row("Duração", `${v.package.duration_days} ${v.package.duration_days === 1 ? "dia" : "dias"}`);
+  row("Destino", v.package.location || "—", true);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(120);
+  doc.text("Data de partida", 120, y);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(30);
+  doc.text(v.package.departure_date ? formatDate(v.package.departure_date) : "—", 120, y + 5);
+  y += 12;
+  
+  row("Hotel", v.package.hotel_name || "—", true);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(120);
+  doc.text("Tipo de Acomodação", 120, y);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(30);
+  doc.text(v.accommodation_type || "—", 120, y + 5);
+  y += 12;
 
-  y += 2;
-  section("Reserva");
-  row("Quantidade de viajantes", String(v.quantity));
-  if (v.unit_price) row("Valor unitário", formatBRL(Number(v.unit_price)));
-  row("Valor total", formatBRL(Number(v.total_price)));
-  if (v.created_at) row("Data da reserva", formatDate(v.created_at));
+  section("Programação");
+  if (v.package.itinerary_main) {
+    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.text("Roteiro Principal:", 15, y);
+    y += 4;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+    const lines = doc.splitTextToSize(v.package.itinerary_main, W - 30);
+    doc.text(lines, 15, y);
+    y += (lines.length * 4) + 4;
+  }
+  if (v.package.itinerary_farewell) {
+    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.text("Despedida:", 15, y);
+    y += 4;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+    const lines = doc.splitTextToSize(v.package.itinerary_farewell, W - 30);
+    doc.text(lines, 15, y);
+    y += (lines.length * 4) + 4;
+  }
+  if (v.package.itinerary_return) {
+    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.text("Retorno:", 15, y);
+    y += 4;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+    const lines = doc.splitTextToSize(v.package.itinerary_return, W - 30);
+    doc.text(lines, 15, y);
+    y += (lines.length * 4) + 4;
+  }
 
+  doc.addPage();
+  y = 20;
+  section("INFORMATIVO & REGULAMENTO");
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(50);
+  
+  const regulamento = `NO ONIBUS:
+Não será permitido acesso ao veiculo: Sem pulseira identificação, sem camisa, molhado ou em trajes de banho. Não permitido uso de: Cooler, lsopor, caixa de som de qualquer tamanho ainda que desligada e uso de bebidas alcoólicas e cigarros mesmo que eletrônico.
+NÃO HAVERA ACORDO SOB OS ITENS MENCIONADOS ACIMA.
+Pontualidade e fundamental: Em caso de atraso, o passageiro perdera o passeio, sem direito a devolução do valor pago.
+Durante percursos passageiros devem estar sentados, e com uso do cinto de segurança. Não nos responsabilizamos por objetos esquecidos ou deixados no interior do veículo, ao desembarca leve todos os objetos pessoais consigo.
+Em caso de danos causado no veiculo pelo passageiro, mesmo será responsabilizado e terá que arca com custo diretamente com empresa. Isentado o coordenador de viagem de quaisquer responsabilidades.
+
+HOTEL:
+Não permitido uso de som em áreas comuns. Evitem barulhos nos corredores.
+Não nos responsabilizamos por itens servidos no restaurante. Ao sair certifique se não está esquecendo nada nos armários ou nas dependências do apartamento.
+A distribuição das acomodações será feita de acordo ao disponibilizado pelo hotel. Peço que aguarde ser chamado para retirada das chaves.
+
+VIAGEM:
+Caso necessário, será efetuado alteração na programação pelos guias e coordenadores de viagem sem prévio aviso. Ainda que situação seja causada por fornecedores terceirizados.
+Ao chegarmos em Porto de Galinhas, será disponibilizado uma estrutura de restaurante com café da manhã não incluso, onde poderá ser feito a troca de roupa de praia para darmos início a nossa jornada do dia. Gentileza levar troca de roupa na bagagem de mao, para que se evite a abertura de bagageiro.
+Calma, imprevistos acontecem. Se algo não sair como planejado, mantenha sempre a calma, mau humor e nervosismo podem estragar parte do seu divertimento.
+Não incluso: Despesas pessoais; taxas de embarque; taxas de locais visitados bem como taxas de qualquer tipo de serviço; TAXA DE GUIAMENTO R$ 5.00 POR PESSOA`;
+
+  const regLines = doc.splitTextToSize(regulamento, W - 30);
+  doc.text(regLines, 15, y);
+  y += (regLines.length * 3.5) + 10;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  const now = new Date();
+  doc.text(`COMPRA REALIZADA NO SITE : https://dmaisturismo.com.br na data: ${formatDate(v.created_at || now.toISOString())}`, 15, y);
+  
   // Footer
   doc.setFont("helvetica", "italic");
-  doc.setFontSize(9);
+  doc.setFontSize(8);
   doc.setTextColor(120);
-  doc.text("Apresente este voucher no embarque. Em caso de dúvidas, entre em contato com a D+ Turismo.", 15, 280);
+  doc.text("D+ TURISMO - Transformando sonhos em destinos.", W/2, H - 10, { align: "center" });
 
   doc.save(`voucher-${v.voucher_code}.pdf`);
 };
