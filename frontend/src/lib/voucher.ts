@@ -122,47 +122,65 @@ export const generateVoucherPDF = (v: VoucherData) => {
   y += 15;
 
   section("Programação");
+  
+  // Impede quebras cegas renderizando o texto linha por linha de forma dinâmica
   if (v.package.itinerary_main) {
     if (y > H - 25) { doc.addPage(); y = 20; }
     doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text("Roteiro Principal:", 15, y);
     y += 5;
     doc.setFont("helvetica", "normal"); doc.setFontSize(11);
     const lines = doc.splitTextToSize(v.package.itinerary_main, W - 30);
-    doc.text(lines, 15, y);
-    y += (lines.length * 5) + 6;
+    lines.forEach((line: string) => {
+      if (y > H - 20) { doc.addPage(); y = 20; }
+      doc.text(line, 15, y);
+      y += 5.5;
+    });
+    y += 4;
   }
+  
   if (v.package.itinerary_farewell) {
     if (y > H - 25) { doc.addPage(); y = 20; }
     doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text("Despedida:", 15, y);
     y += 5;
     doc.setFont("helvetica", "normal"); doc.setFontSize(11);
     const lines = doc.splitTextToSize(v.package.itinerary_farewell, W - 30);
-    doc.text(lines, 15, y);
-    y += (lines.length * 5) + 6;
+    lines.forEach((line: string) => {
+      if (y > H - 20) { doc.addPage(); y = 20; }
+      doc.text(line, 15, y);
+      y += 5.5;
+    });
+    y += 4;
   }
+  
   if (v.package.itinerary_return) {
     if (y > H - 25) { doc.addPage(); y = 20; }
     doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text("Retorno:", 15, y);
     y += 5;
     doc.setFont("helvetica", "normal"); doc.setFontSize(11);
     const lines = doc.splitTextToSize(v.package.itinerary_return, W - 30);
-    doc.text(lines, 15, y);
-    y += (lines.length * 5) + 6;
+    lines.forEach((line: string) => {
+      if (y > H - 20) { doc.addPage(); y = 20; }
+      doc.text(line, 15, y);
+      y += 5.5;
+    });
+    y += 4;
   }
 
-  // Regulamento em página dedicada
+  // FORCE AQUI A NOVA PÁGINA EXCLUSIVA PARA O INFORMATIVO
+  // Assim garantimos que o regulamento nunca dividirá teto na mesma página que a programação
   doc.addPage();
   y = 20;
+  
   section("INFORMATIVO & REGULAMENTO");
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(14); // Mantido o tamanho ideal solicitado
+  doc.setFontSize(14); // Mantido o tamanho ideal solicitado por você
   doc.setTextColor(50);
   
   const regulamento = `NO ÔNIBUS:
 Não será permitido acesso ao veículo: Sem pulseira identificação, sem camisa, molhado ou em trajes de banho. Não permitido uso de: Cooler, Isopor, caixa de som de qualquer tamanho ainda que desligada e uso de bebidas alcoólicas e cigarros mesmo que eletrônico.
 NÃO HAVERÁ ACORDO SOB OS ITENS MENCIONADOS ACIMA.
 Pontualidade é fundamental: Em caso de atraso, o passageiro perderá o passeio, sem direito a devolução do valor pago.
-Durante percursos passageiros devem estar sentados, e com uso do cinto de segurança. Não nos responsabilizamos por objetos esquecidos ou deixados no interior do veículo, ao desembarcar leve todos os objetos pessoais consigo.
+Durante percursos passageiros devem estar sentados, e com uso do cinto de segurança. Não nos responsabilizamos por objetos esquecidos ou deixados no interior do veículo, ao endembarcar leve todos os objetos pessoais consigo.
 Em caso de danos causados no veículo pelo passageiro, o mesmo será responsabilizado e terá que arcar com o custo diretamente com a empresa. Isentando o coordenador de viagem de quaisquer responsabilidades.
 
 HOTEL:
@@ -178,8 +196,7 @@ Não incluso: Despesas pessoais; taxas de embarque; taxas de locais visitados be
 
   const regLines = doc.splitTextToSize(regulamento, W - 30);
   
-  // Renderiza linha por linha do regulamento controlando o espaçamento vertical real
-  const lineHeight = 6.5; // Altura ideal calculada para a fonte 14
+  const lineHeight = 6.5; 
   regLines.forEach((line: string) => {
     if (y > H - 25) { 
       doc.addPage(); 
@@ -189,10 +206,8 @@ Não incluso: Despesas pessoais; taxas de embarque; taxas de locais visitados be
     y += lineHeight;
   });
 
-  // Espaçamento de segurança após o regulamento completo terminar
   y += 8;
 
-  // Verifica se o texto de compra cabe no espaço restante, senão joga para a próxima folha
   if (y > H - 25) { doc.addPage(); y = 20; }
   
   doc.setFont("helvetica", "bold");
@@ -201,7 +216,7 @@ Não incluso: Despesas pessoais; taxas de embarque; taxas de locais visitados be
   const now = new Date();
   doc.text(`COMPRA REALIZADA NO SITE : https://dmaisturismo.com.br na data: ${formatDate(v.created_at || now.toISOString())}`, 15, y);
   
-  // Footer presente em todas as páginas criadas no encerramento do arquivo
+  // Rodapé dinâmico aplicado a todas as páginas geradas
   const totalPages = doc.internal.pages.length - 1;
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
