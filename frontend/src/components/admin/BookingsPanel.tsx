@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { bookingsApi, type Booking } from "@/lib/api";
+import { bookingsApi, accommodationsApi, type Booking } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -67,15 +67,43 @@ export const BookingsPanel = () => {
 
   const handleGenerateVoucher = async (b: Booking) => {
     if (!b.voucher_code) { toast.error("Voucher indisponível"); return; }
+    
+    // Buscar dados de acomodação para o voucher
+    let accommodationType = "—";
+    try {
+      const accs = await accommodationsApi.list();
+      const myAcc = accs.find((a: any) => a.booking_id === b.id);
+      if (myAcc) accommodationType = (myAcc.accommodation_type as string).toUpperCase();
+    } catch (e) {
+      console.error("Erro ao buscar acomodação", e);
+    }
+
     generateVoucherPDF({
       voucher_code: b.voucher_code,
       quantity: b.quantity,
       total_price: Number(b.total_price),
       unit_price: Number(b.unit_price),
       created_at: b.created_at,
-      customer: { full_name: b.user_full_name, email: b.user_email, phone: b.user_phone },
-      package: { title: b.packages?.title, location: b.packages?.location, departure_date: b.packages?.departure_date, duration_days: b.packages?.duration_days },
+      customer: { 
+        full_name: b.user_full_name, 
+        email: b.user_email, 
+        phone: b.user_phone,
+        rg: b.user_rg 
+      },
+      package: { 
+        title: b.packages?.title, 
+        location: b.packages?.location, 
+        departure_date: b.packages?.departure_date, 
+        duration_days: b.packages?.duration_days,
+        hotel_name: b.packages?.hotel_name,
+        itinerary_main: b.packages?.itinerary_main,
+        itinerary_farewell: b.packages?.itinerary_farewell,
+        itinerary_return: b.packages?.itinerary_return,
+      },
+      passengers: allPassengers(b),
+      accommodation_type: accommodationType
     });
+
     if (b.status !== "pagamento_finalizado") {
       try {
         await bookingsApi.setStatus(b.id, "pagamento_finalizado");
