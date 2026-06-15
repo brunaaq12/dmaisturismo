@@ -37,69 +37,70 @@ export const generateVoucherPDF = (v: VoucherData) => {
   doc.rect(0, 0, W, 30, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
+  doc.setFontSize(24); // Aumentado de 22 para 24
   doc.text("D+ TURISMO", 15, 19);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
+  doc.setFontSize(12); // Aumentado de 10 para 12
   doc.text("Voucher de Viagem", W - 15, 19, { align: "right" });
 
   // Voucher code box
   doc.setTextColor(15, 27, 61);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
+  doc.setFontSize(14); // Aumentado de 12 para 14
   doc.text("Código do voucher", 15, 45);
-  doc.setFontSize(18);
+  doc.setFontSize(22); // Aumentado de 18 para 22
   doc.setTextColor(201, 168, 76);
-  doc.text(v.voucher_code, 15, 54);
+  doc.text(v.voucher_code, 15, 55);
 
-  let y = 70;
+  let y = 73;
   const section = (title: string) => {
-    if (y > H - 30) { doc.addPage(); y = 20; }
+    if (y > H - 35) { doc.addPage(); y = 20; }
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
+    doc.setFontSize(14); // Aumentado de 12 para 14
     doc.setTextColor(15, 27, 61);
     doc.text(title, 15, y);
     doc.setDrawColor(220);
-    doc.line(15, y + 1.5, W - 15, y + 1.5);
-    y += 8;
+    doc.line(15, y + 2, W - 15, y + 2);
+    y += 10; // Ajustado espaçamento pós-título
   };
 
   const row = (label: string, value: string, inline = false) => {
-    if (y > H - 20) { doc.addPage(); y = 20; }
+    if (y > H - 25) { doc.addPage(); y = 20; }
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
+    doc.setFontSize(10); // Aumentado de 9 para 10 (Labels)
     doc.setTextColor(120);
     doc.text(label, 15, y);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
+    doc.setFontSize(12); // Aumentado de 11 para 12 (Valores)
     doc.setTextColor(30);
-    doc.text(value || "—", 15, y + 5);
-    if (!inline) y += 12;
+    doc.text(value || "—", 15, y + 6);
+    if (!inline) y += 15; // Ajustado salto de linha
   };
 
   section("Dados do Titular");
   row("Nome", v.customer.full_name || "—", true);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(120);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(120);
   doc.text("RG", 120, y);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(30);
-  doc.text(v.customer.rg || "—", 120, y + 5);
-  y += 12;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(30);
+  doc.text(v.customer.rg || "—", 120, y + 6);
+  y += 15;
+  
   row("E-mail", v.customer.email || "—", true);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(120);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(120);
   doc.text("Contato", 120, y);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(30);
-  doc.text(v.customer.phone || "—", 120, y + 5);
-  y += 12;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(30);
+  doc.text(v.customer.phone || "—", 120, y + 6);
+  y += 15;
 
   if (v.passengers && v.passengers.length > 0) {
     section("Todos os Passageiros");
     v.passengers.forEach((p) => {
-      if (y > H - 15) { doc.addPage(); y = 20; }
+      if (y > H - 20) { doc.addPage(); y = 20; }
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
+      doc.setFontSize(11); // Aumentado de 10 para 11
       doc.setTextColor(30);
       doc.text(`${p.full_name} - RG: ${p.rg || "—"} (${p.role})`, 15, y);
-      y += 6;
+      y += 8; // Ajustado espaçamento entre linhas de passageiros
     });
     y += 4;
   }
@@ -107,84 +108,89 @@ export const generateVoucherPDF = (v: VoucherData) => {
   section("Pacote e Hospedagem");
   row("Título", v.package.title || "—");
   row("Destino", v.package.location || "—", true);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(120);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(120);
   doc.text("Data de partida", 120, y);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(30);
-  doc.text(v.package.departure_date ? formatDate(v.package.departure_date) : "—", 120, y + 5);
-  y += 12;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(30);
+  doc.text(v.package.departure_date ? formatDate(v.package.departure_date) : "—", 120, y + 6);
+  y += 15;
   
   row("Hotel", v.package.hotel_name || "—", true);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(120);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(120);
   doc.text("Tipo de Acomodação", 120, y);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(30);
-  doc.text(v.accommodation_type || "—", 120, y + 5);
-  y += 12;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(30);
+  doc.text(v.accommodation_type || "—", 120, y + 6);
+  y += 15;
 
   section("Programação");
   if (v.package.itinerary_main) {
-    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.text("Roteiro Principal:", 15, y);
-    y += 4;
-    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+    if (y > H - 25) { doc.addPage(); y = 20; }
+    doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text("Roteiro Principal:", 15, y);
+    y += 5;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(11); // Aumentado de 9 para 11
     const lines = doc.splitTextToSize(v.package.itinerary_main, W - 30);
     doc.text(lines, 15, y);
-    y += (lines.length * 4) + 4;
+    y += (lines.length * 5) + 6;
   }
   if (v.package.itinerary_farewell) {
-    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.text("Despedida:", 15, y);
-    y += 4;
-    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+    if (y > H - 25) { doc.addPage(); y = 20; }
+    doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text("Despedida:", 15, y);
+    y += 5;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(11); // Aumentado de 9 para 11
     const lines = doc.splitTextToSize(v.package.itinerary_farewell, W - 30);
     doc.text(lines, 15, y);
-    y += (lines.length * 4) + 4;
+    y += (lines.length * 5) + 6;
   }
   if (v.package.itinerary_return) {
-    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.text("Retorno:", 15, y);
-    y += 4;
-    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+    if (y > H - 25) { doc.addPage(); y = 20; }
+    doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text("Retorno:", 15, y);
+    y += 5;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(11); // Aumentado de 9 para 11
     const lines = doc.splitTextToSize(v.package.itinerary_return, W - 30);
     doc.text(lines, 15, y);
-    y += (lines.length * 4) + 4;
+    y += (lines.length * 5) + 6;
   }
 
+  // Regulamento em página dedicada para garantir integridade visual
   doc.addPage();
   y = 20;
   section("INFORMATIVO & REGULAMENTO");
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
+  doc.setFontSize(9.5); // Aumentado de 8 para 9.5 para melhorar consideravelmente a leitura das regras
   doc.setTextColor(50);
   
-  const regulamento = `NO ONIBUS:
-Não será permitido acesso ao veiculo: Sem pulseira identificação, sem camisa, molhado ou em trajes de banho. Não permitido uso de: Cooler, lsopor, caixa de som de qualquer tamanho ainda que desligada e uso de bebidas alcoólicas e cigarros mesmo que eletrônico.
-NÃO HAVERA ACORDO SOB OS ITENS MENCIONADOS ACIMA.
-Pontualidade e fundamental: Em caso de atraso, o passageiro perdera o passeio, sem direito a devolução do valor pago.
-Durante percursos passageiros devem estar sentados, e com uso do cinto de segurança. Não nos responsabilizamos por objetos esquecidos ou deixados no interior do veículo, ao desembarca leve todos os objetos pessoais consigo.
-Em caso de danos causado no veiculo pelo passageiro, mesmo será responsabilizado e terá que arca com custo diretamente com empresa. Isentado o coordenador de viagem de quaisquer responsabilidades.
+  const regulamento = `NO ÔNIBUS:
+Não será permitido acesso ao veículo: Sem pulseira identificação, sem camisa, molhado ou em trajes de banho. Não permitido uso de: Cooler, Isopor, caixa de som de qualquer tamanho ainda que desligada e uso de bebidas alcoólicas e cigarros mesmo que eletrônico.
+NÃO HAVERÁ ACORDO SOB OS ITENS MENCIONADOS ACIMA.
+Pontualidade é fundamental: Em caso de atraso, o passageiro perderá o passeio, sem direito a devolução do valor pago.
+Durante percursos passageiros devem estar sentados, e com uso do cinto de segurança. Não nos responsabilizamos por objetos esquecidos ou deixados no interior do veículo, ao desembarcar leve todos os objetos pessoais consigo.
+Em caso de danos causados no veículo pelo passageiro, o mesmo será responsabilizado e terá que arcar com o custo diretamente com a empresa. Isentando o coordenador de viagem de quaisquer responsabilidades.
 
 HOTEL:
 Não permitido uso de som em áreas comuns. Evitem barulhos nos corredores.
-Não nos responsabilizamos por itens servidos no restaurante. Ao sair certifique se não está esquecendo nada nos armários ou nas dependências do apartamento.
+Não nos responsabilizamos por itens servidos no restaurante. Ao sair certifique-se não está esquecendo nada nos armários ou nas dependências do apartamento.
 A distribuição das acomodações será feita de acordo ao disponibilizado pelo hotel. Peço que aguarde ser chamado para retirada das chaves.
 
 VIAGEM:
-Caso necessário, será efetuado alteração na programação pelos guias e coordenadores de viagem sem prévio aviso. Ainda que situação seja causada por fornecedores terceirizados.
-Ao chegarmos em Porto de Galinhas, será disponibilizado uma estrutura de restaurante com café da manhã não incluso, onde poderá ser feito a troca de roupa de praia para darmos início a nossa jornada do dia. Gentileza levar troca de roupa na bagagem de mao, para que se evite a abertura de bagageiro.
+Caso necessário, será efetuada alteração na programação pelos guias e coordenadores de viagem sem prévio aviso. Ainda que a situação seja causada por fornecedores terceirizados.
+Ao chegarmos em Porto de Galinhas, será disponibilizada uma estrutura de restaurante com café da manhã não incluso, onde poderá ser feita a troca de roupa de praia para darmos início a nossa jornada do dia. Gentileza levar troca de roupa na bagagem de mão, para que se evite a abertura de bagageiro.
 Calma, imprevistos acontecem. Se algo não sair como planejado, mantenha sempre a calma, mau humor e nervosismo podem estragar parte do seu divertimento.
 Não incluso: Despesas pessoais; taxas de embarque; taxas de locais visitados bem como taxas de qualquer tipo de serviço; TAXA DE GUIAMENTO R$ 5.00 POR PESSOA`;
 
   const regLines = doc.splitTextToSize(regulamento, W - 30);
   doc.text(regLines, 15, y);
-  y += (regLines.length * 3.5) + 10;
+  y += (regLines.length * 4.2) + 12;
 
+  if (y > H - 20) { doc.addPage(); y = 20; }
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
+  doc.setFontSize(10.5); // Aumentado de 9 para 10.5
   const now = new Date();
   doc.text(`COMPRA REALIZADA NO SITE : https://dmaisturismo.com.br na data: ${formatDate(v.created_at || now.toISOString())}`, 15, y);
   
   // Footer
   doc.setFont("helvetica", "italic");
-  doc.setFontSize(8);
+  doc.setFontSize(9); // Aumentado de 8 para 9
   doc.setTextColor(120);
-  doc.text("D+ TURISMO - Transformando sonhos em destinos.", W/2, H - 10, { align: "center" });
+  doc.text("D+ TURISMO - Transformando sonhos em destinos.", W / 2, H - 10, { align: "center" });
 
   doc.save(`voucher-${v.voucher_code}.pdf`);
 };
