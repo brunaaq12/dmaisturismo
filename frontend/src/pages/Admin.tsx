@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { type FC, type ChangeEvent } from "react";
 import { packagesApi, categoriesApi, packageTypesApi, type Package, type PackageType } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { fetchCategories } from "@/lib/categories";
@@ -30,6 +29,7 @@ const empty = {
   departure_date: "", duration_days: 1, price: 0, total_spots: 10,
   cover_image: "", itinerary: "", included: "", is_featured: false,
   package_type: "" as string,
+  hotel_name: "", itinerary_main: "", itinerary_farewell: "", itinerary_return: "",
 };
 
 const slugify = (s: string) =>
@@ -120,6 +120,10 @@ const Admin = () => {
       price: Number(p.price), total_spots: p.total_spots,
       cover_image: p.cover_image || "", itinerary: p.itinerary || "", included: p.included || "",
       is_featured: Boolean(p.is_featured), package_type: p.package_type || "",
+      hotel_name: p.hotel_name || "",
+      itinerary_main: p.itinerary_main || "",
+      itinerary_farewell: p.itinerary_farewell || "",
+      itinerary_return: p.itinerary_return || "",
     });
     setLocalPreview(""); setOpen(true);
   };
@@ -137,6 +141,10 @@ const Admin = () => {
         included: form.included || null, is_featured: form.is_featured,
         package_type: form.package_type || null, gallery: [],
         is_active: true, available_spots: Number(form.total_spots),
+        hotel_name: form.hotel_name || null,
+        itinerary_main: form.itinerary_main || null,
+        itinerary_farewell: form.itinerary_farewell || null,
+        itinerary_return: form.itinerary_return || null,
       };
       if (editing) {
         await packagesApi.update(editing.id, payload);
@@ -288,7 +296,7 @@ const Admin = () => {
                             </>
                           ) : (
                             <>
-                              <Button size="sm" variant="outline" onClick={() => startEditType(t)}><Pencil className="h-3.5 w-3.5" /></Button>
+                              <Button size="sm" variant="ghost" onClick={() => startEditType(t)}><Pencil className="h-4 w-4" /></Button>
                               <Button size="sm" variant="ghost" onClick={() => deleteType(t.slug)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                             </>
                           )}
@@ -328,6 +336,9 @@ const Admin = () => {
                 <Input type="number" min={1} value={form.total_spots} onChange={(e) => setForm({ ...form, total_spots: Number(e.target.value) })} disabled={!!editing} />
                 {editing && <p className="text-xs text-muted-foreground mt-1">Vagas só podem ser alteradas em novos pacotes</p>}
               </div>
+              
+              <div className="md:col-span-2"><Label>Nome do Hotel</Label><Input value={form.hotel_name} onChange={(e) => setForm({ ...form, hotel_name: e.target.value })} placeholder="Ex: Hotel Mar Azul" /></div>
+
               <div className="md:col-span-2"><Label>Tipo de pacote</Label>
                 <Select value={form.package_type || "__none__"} onValueChange={(v) => setForm({ ...form, package_type: v === "__none__" ? "" : v })}>
                   <SelectTrigger><SelectValue placeholder="Sem tipo" /></SelectTrigger>
@@ -346,7 +357,12 @@ const Admin = () => {
                   <img src={localPreview || form.cover_image} alt="Prévia" className="mt-3 h-40 w-full object-cover rounded-lg border border-border" />
                 )}
               </div>
-              <div className="md:col-span-2"><Label>Itinerário</Label><Textarea rows={3} value={form.itinerary} onChange={(e) => setForm({ ...form, itinerary: e.target.value })} /></div>
+              
+              <div className="md:col-span-2"><Label>Roteiro Principal</Label><Textarea rows={3} value={form.itinerary_main} onChange={(e) => setForm({ ...form, itinerary_main: e.target.value })} placeholder="Descreva o roteiro principal..." /></div>
+              <div className="md:col-span-2"><Label>Despedida</Label><Textarea rows={2} value={form.itinerary_farewell} onChange={(e) => setForm({ ...form, itinerary_farewell: e.target.value })} placeholder="Descreva a despedida..." /></div>
+              <div className="md:col-span-2"><Label>Retorno</Label><Textarea rows={2} value={form.itinerary_return} onChange={(e) => setForm({ ...form, itinerary_return: e.target.value })} placeholder="Descreva o retorno..." /></div>
+              
+              <div className="md:col-span-2"><Label>Itinerário (Antigo/Geral)</Label><Textarea rows={3} value={form.itinerary} onChange={(e) => setForm({ ...form, itinerary: e.target.value })} /></div>
               <div className="md:col-span-2"><Label>O que está incluso (separe por vírgula)</Label><Textarea rows={2} value={form.included} onChange={(e) => setForm({ ...form, included: e.target.value })} /></div>
               <div className="md:col-span-2 flex items-center justify-between rounded-lg border border-border p-3">
                 <div><Label className="text-base">Pacote em destaque</Label><p className="text-xs text-muted-foreground">Marca este pacote com selo de destaque na vitrine.</p></div>
