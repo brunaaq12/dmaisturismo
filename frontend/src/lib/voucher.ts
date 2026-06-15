@@ -155,7 +155,7 @@ export const generateVoucherPDF = (v: VoucherData) => {
   y = 20;
   section("INFORMATIVO & REGULAMENTO");
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9.5); // Aumentado de 8 para 9.5 para melhorar consideravelmente a leitura das regras
+  doc.setFontSize(14); // Aumentado de 8 para 9.5 para melhorar consideravelmente a leitura das regras
   doc.setTextColor(50);
   
   const regulamento = `NO ÔNIBUS:
@@ -182,13 +182,13 @@ Não incluso: Despesas pessoais; taxas de embarque; taxas de locais visitados be
 
   if (y > H - 20) { doc.addPage(); y = 20; }
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(15); // Aumentado de 9 para 10.5
+  doc.setFontSize(9); // Aumentado de 9 para 10.5
   const now = new Date();
   doc.text(`COMPRA REALIZADA NO SITE : https://dmaisturismo.com.br na data: ${formatDate(v.created_at || now.toISOString())}`, 15, y);
   
   // Footer
   doc.setFont("helvetica", "italic");
-  doc.setFontSize(10); // Aumentado de 8 para 9
+  doc.setFontSize(9); // Aumentado de 8 para 9
   doc.setTextColor(120);
   doc.text("D+ TURISMO - Transformando sonhos em destinos.", W / 2, H - 10, { align: "center" });
 
