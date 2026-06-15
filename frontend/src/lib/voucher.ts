@@ -182,7 +182,7 @@ Não incluso: Despesas pessoais; taxas de embarque; taxas de locais visitados be
 
   if (y > H - 20) { doc.addPage(); y = 20; }
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.5); // Aumentado de 9 para 10.5
+  doc.setFontSize(15); // Aumentado de 9 para 10.5
   const now = new Date();
   doc.text(`COMPRA REALIZADA NO SITE : https://dmaisturismo.com.br na data: ${formatDate(v.created_at || now.toISOString())}`, 15, y);
   
