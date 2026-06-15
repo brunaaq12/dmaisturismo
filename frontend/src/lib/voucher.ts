@@ -37,18 +37,18 @@ export const generateVoucherPDF = (v: VoucherData) => {
   doc.rect(0, 0, W, 30, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(24); // Aumentado de 22 para 24
+  doc.setFontSize(24);
   doc.text("D+ TURISMO", 15, 19);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(12); // Aumentado de 10 para 12
+  doc.setFontSize(12);
   doc.text("Voucher de Viagem", W - 15, 19, { align: "right" });
 
   // Voucher code box
   doc.setTextColor(15, 27, 61);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(14); // Aumentado de 12 para 14
+  doc.setFontSize(14);
   doc.text("Código do voucher", 15, 45);
-  doc.setFontSize(22); // Aumentado de 18 para 22
+  doc.setFontSize(22);
   doc.setTextColor(201, 168, 76);
   doc.text(v.voucher_code, 15, 55);
 
@@ -56,25 +56,25 @@ export const generateVoucherPDF = (v: VoucherData) => {
   const section = (title: string) => {
     if (y > H - 35) { doc.addPage(); y = 20; }
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(14); // Aumentado de 12 para 14
+    doc.setFontSize(14);
     doc.setTextColor(15, 27, 61);
     doc.text(title, 15, y);
     doc.setDrawColor(220);
     doc.line(15, y + 2, W - 15, y + 2);
-    y += 10; // Ajustado espaçamento pós-título
+    y += 10;
   };
 
   const row = (label: string, value: string, inline = false) => {
     if (y > H - 25) { doc.addPage(); y = 20; }
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(10); // Aumentado de 9 para 10 (Labels)
+    doc.setFontSize(10);
     doc.setTextColor(120);
     doc.text(label, 15, y);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(12); // Aumentado de 11 para 12 (Valores)
+    doc.setFontSize(12);
     doc.setTextColor(30);
     doc.text(value || "—", 15, y + 6);
-    if (!inline) y += 15; // Ajustado salto de linha
+    if (!inline) y += 15;
   };
 
   section("Dados do Titular");
@@ -97,10 +97,10 @@ export const generateVoucherPDF = (v: VoucherData) => {
     v.passengers.forEach((p) => {
       if (y > H - 20) { doc.addPage(); y = 20; }
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(11); // Aumentado de 10 para 11
+      doc.setFontSize(11);
       doc.setTextColor(30);
       doc.text(`${p.full_name} - RG: ${p.rg || "—"} (${p.role})`, 15, y);
-      y += 8; // Ajustado espaçamento entre linhas de passageiros
+      y += 8;
     });
     y += 4;
   }
@@ -126,7 +126,7 @@ export const generateVoucherPDF = (v: VoucherData) => {
     if (y > H - 25) { doc.addPage(); y = 20; }
     doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text("Roteiro Principal:", 15, y);
     y += 5;
-    doc.setFont("helvetica", "normal"); doc.setFontSize(11); // Aumentado de 9 para 11
+    doc.setFont("helvetica", "normal"); doc.setFontSize(11);
     const lines = doc.splitTextToSize(v.package.itinerary_main, W - 30);
     doc.text(lines, 15, y);
     y += (lines.length * 5) + 6;
@@ -135,7 +135,7 @@ export const generateVoucherPDF = (v: VoucherData) => {
     if (y > H - 25) { doc.addPage(); y = 20; }
     doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text("Despedida:", 15, y);
     y += 5;
-    doc.setFont("helvetica", "normal"); doc.setFontSize(11); // Aumentado de 9 para 11
+    doc.setFont("helvetica", "normal"); doc.setFontSize(11);
     const lines = doc.splitTextToSize(v.package.itinerary_farewell, W - 30);
     doc.text(lines, 15, y);
     y += (lines.length * 5) + 6;
@@ -144,18 +144,18 @@ export const generateVoucherPDF = (v: VoucherData) => {
     if (y > H - 25) { doc.addPage(); y = 20; }
     doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text("Retorno:", 15, y);
     y += 5;
-    doc.setFont("helvetica", "normal"); doc.setFontSize(11); // Aumentado de 9 para 11
+    doc.setFont("helvetica", "normal"); doc.setFontSize(11);
     const lines = doc.splitTextToSize(v.package.itinerary_return, W - 30);
     doc.text(lines, 15, y);
     y += (lines.length * 5) + 6;
   }
 
-  // Regulamento em página dedicada para garantir integridade visual
+  // Regulamento em página dedicada
   doc.addPage();
   y = 20;
   section("INFORMATIVO & REGULAMENTO");
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(14); // Aumentado de 8 para 9.5 para melhorar consideravelmente a leitura das regras
+  doc.setFontSize(14); // Mantido o tamanho ideal solicitado
   doc.setTextColor(50);
   
   const regulamento = `NO ÔNIBUS:
@@ -177,20 +177,39 @@ Calma, imprevistos acontecem. Se algo não sair como planejado, mantenha sempre 
 Não incluso: Despesas pessoais; taxas de embarque; taxas de locais visitados bem como taxas de qualquer tipo de serviço; TAXA DE GUIAMENTO R$ 5.00 POR PESSOA`;
 
   const regLines = doc.splitTextToSize(regulamento, W - 30);
-  doc.text(regLines, 15, y);
-  y += (regLines.length * 4.2) + 12;
+  
+  // Renderiza linha por linha do regulamento controlando o espaçamento vertical real
+  const lineHeight = 6.5; // Altura ideal calculada para a fonte 14
+  regLines.forEach((line: string) => {
+    if (y > H - 25) { 
+      doc.addPage(); 
+      y = 20; 
+    }
+    doc.text(line, 15, y);
+    y += lineHeight;
+  });
 
-  if (y > H - 20) { doc.addPage(); y = 20; }
+  // Espaçamento de segurança após o regulamento completo terminar
+  y += 8;
+
+  // Verifica se o texto de compra cabe no espaço restante, senão joga para a próxima folha
+  if (y > H - 25) { doc.addPage(); y = 20; }
+  
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9); // Aumentado de 9 para 10.5
+  doc.setFontSize(11);
+  doc.setTextColor(30);
   const now = new Date();
   doc.text(`COMPRA REALIZADA NO SITE : https://dmaisturismo.com.br na data: ${formatDate(v.created_at || now.toISOString())}`, 15, y);
   
-  // Footer
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(9); // Aumentado de 8 para 9
-  doc.setTextColor(120);
-  doc.text("D+ TURISMO - Transformando sonhos em destinos.", W / 2, H - 10, { align: "center" });
+  // Footer presente em todas as páginas criadas no encerramento do arquivo
+  const totalPages = doc.internal.pages.length - 1;
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text("D+ TURISMO - Transformando sonhos em destinos.", W / 2, H - 10, { align: "center" });
+  }
 
   doc.save(`voucher-${v.voucher_code}.pdf`);
 };
