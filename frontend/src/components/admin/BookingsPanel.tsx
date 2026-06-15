@@ -25,8 +25,8 @@ const buildWhatsappUrl = (phone: string | null | undefined, message: string) => 
 };
 
 /** Retorna SEMPRE: [titular, ...acompanhantes]
- *  O titular nunca é omitido; acompanhantes são os passengers que
- *  têm nome diferente do titular (evita duplicata). */
+ * O titular nunca é omitido; acompanhantes são os passengers que
+ * têm nome diferente do titular (evita duplicata). */
 function allPassengers(b: Booking) {
   const titular = {
     full_name: b.user_full_name || "",
@@ -78,6 +78,7 @@ export const BookingsPanel = () => {
       console.error("Erro ao buscar acomodação", e);
     }
 
+    // Dispara o download do PDF contendo a estrutura atualizada
     generateVoucherPDF({
       voucher_code: b.voucher_code,
       quantity: b.quantity,
@@ -104,14 +105,24 @@ export const BookingsPanel = () => {
       accommodation_type: accommodationType
     });
 
+    // Se o status for alterado com sucesso, redireciona para o WhatsApp
     if (b.status !== "pagamento_finalizado") {
       try {
         await bookingsApi.setStatus(b.id, "pagamento_finalizado");
-      } catch (e: unknown) { toast.error(e instanceof Error ? e.message : "Erro"); return; }
+      } catch (e: unknown) { 
+        toast.error(e instanceof Error ? e.message : "Erro ao atualizar status para finalizado"); 
+        return; 
+      }
     }
+
     const url = buildWhatsappUrl(b.user_phone, `Olá ${b.user_full_name || ""}! Segue em anexo o voucher da sua reserva ${b.voucher_code} - pacote "${b.packages?.title || ""}". Boa viagem! 🌴✈️`);
-    if (url) { window.open(url, "_blank", "noopener,noreferrer"); toast.success("Voucher baixado. Anexe o PDF no WhatsApp aberto."); }
-    else toast.success("Voucher gerado (cliente sem telefone)");
+    if (url) { 
+      window.open(url, "_blank", "noopener,noreferrer"); 
+      toast.success("Voucher baixado. Anexe o PDF no WhatsApp aberto."); 
+    } else {
+      toast.success("Voucher gerado com sucesso (cliente sem telefone).");
+    }
+    
     load();
   };
 
@@ -149,10 +160,11 @@ export const BookingsPanel = () => {
             "RG":             p.rg || "",
             "Pacote":         b.packages?.title || "",
             "Destino":        b.packages?.location || "",
+            "Hospedagem":     b.packages?.hotel_name || "Não informado", // Novo campo adicionado ao Excel
             "Data partida":   b.packages?.departure_date ? formatDate(b.packages.departure_date) : "",
             "Viajantes":      b.quantity,
             "Valor unitário": Number(b.unit_price),
-            "Valor total":    Number(b.total_price),
+            "Valor total":    : Number(b.total_price),
             "Status":         b.status,
             "Data reserva":   formatDate(b.created_at),
           });
