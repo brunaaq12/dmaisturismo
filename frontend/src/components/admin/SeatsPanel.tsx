@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Download, Armchair } from "lucide-react";
 import { toast } from "sonner";
-import { formatDate } from "@/lib/categories"; // Formatação de data segura importada
+import { formatDate } from "@/lib/categories"; 
 import * as XLSX from "xlsx";
 
 interface PassengerRow {
@@ -53,19 +53,23 @@ export const SeatsPanel = () => {
 
     setLoadingBookings(true);
     try {
-      // Filtra direto no backend por package_id + status — evita carregar todas as reservas
-      const filtered = await bookingsApi.all({ status: "pagamento_finalizado", package_id: pkgId });
+      // Faz a requisição de listagem geral para reservas pagas
+      const response = await bookingsApi.all({ status: "pagamento_finalizado" });
       
-      // Filtro adicional de segurança no frontend para garantir que apenas 'pagamento_finalizado' seja exibido
-      const confirmedBookings = filtered.filter(b => b.status === "pagamento_finalizado");
+      // FILTRO CRUCIAL DE SEGURANÇA NO FRONTEND:
+      // Garante que a reserva pertença EXCLUSIVAMENTE ao package_id selecionado
+      const confirmedBookings = response.filter(
+        (b) => b.status === "pagamento_finalizado" && String(b.package_id) === String(pkgId)
+      );
+      
       setBookings(confirmedBookings);
 
       let seatCounter = 1;
       const expanded: PassengerRow[] = [];
 
-      // Mapeia todas as reservas do Pacote selecionado
+      // Mapeia unicamente as reservas filtradas daquele pacote específico
       for (const b of confirmedBookings) {
-        // Extrai o Titular e TODOS os acompanhantes daquela mesma reserva de forma sequencial
+        // Extrai titular e todos os acompanhantes contidos nesta mesma reserva
         const pessoas = allPassengers(b);
         
         for (const p of pessoas) {
@@ -74,7 +78,7 @@ export const SeatsPanel = () => {
             rg: p.rg || "",
             funcao: p.role,
             voucher: b.voucher_code || "",
-            assentoNum: String(seatCounter++), // Sugere numeração sequencial automática
+            assentoNum: String(seatCounter++), 
             confirmado: false,
           });
         }
@@ -188,7 +192,6 @@ export const SeatsPanel = () => {
                 </thead>
                 <tbody>
                   {rows.map((r, idx) => {
-                    // Identifica se faz parte do mesmo grupo/reserva que a linha de cima
                     const isSameGroup = idx > 0 && rows[idx - 1].voucher === r.voucher;
 
                     return (
