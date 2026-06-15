@@ -188,7 +188,7 @@ Não incluso: Despesas pessoais; taxas de embarque; taxas de locais visitados be
   
   // Footer
   doc.setFont("helvetica", "italic");
-  doc.setFontSize(9); // Aumentado de 8 para 9
+  doc.setFontSize(10); // Aumentado de 8 para 9
   doc.setTextColor(120);
   doc.text("D+ TURISMO - Transformando sonhos em destinos.", W / 2, H - 10, { align: "center" });
 
