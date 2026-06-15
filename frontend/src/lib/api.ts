@@ -97,6 +97,12 @@ export interface Package {
   is_featured: boolean;
   package_type: string | null;
   created_at: string;
+  
+  // Novos campos
+  hotel_name?: string | null;
+  itinerary_main?: string | null;
+  itinerary_farewell?: string | null;
+  itinerary_return?: string | null;
 }
 
 export interface PackageFilters {
@@ -146,6 +152,10 @@ export interface Booking {
     location: string;
     departure_date: string;
     duration_days?: number;
+    hotel_name?: string | null;
+    itinerary_main?: string | null;
+    itinerary_farewell?: string | null;
+    itinerary_return?: string | null;
   } | null;
   // admin fields
   pkg_title?: string;
